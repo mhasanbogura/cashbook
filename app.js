@@ -4,7 +4,7 @@
 const $=id=>document.getElementById(id);
 const DEFAULT_CATS={in:['Sales','Service','Salary','Gift','Loan In','Other Income'],
   out:['Food','Transport','Shopping','Bills','Rent','Health','Education','Salary Paid','Loan Out','Other']};
-const state={user:null,demo:false,books:{},current:null,filter:'all',search:'',
+const state={user:null,demo:false,books:{},current:null,filter:'all',search:'',sort:'desc',bookSearch:'',
   monthKey:monthKey(new Date()),editId:null,entryType:'out'};
 function monthKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function fmtMonth(k){const[y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('en-US',{month:'short',year:'numeric'})}
@@ -24,7 +24,7 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classL
 function navigate(page){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=$('page-'+page);if(el)el.classList.add('active');
   document.querySelectorAll('.bottom-nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
-  $('fab-add').style.display=(page==='home')?'flex':'none';
+  $('home-actions').classList.toggle('show',page==='home');
   $('page-title').textContent={home:'Cashbook',books:'My Books',add:state.editId?'Edit Entry':'Add Entry',reports:'Reports',settings:'Settings'}[page]||'Cashbook';
   if(page==='books')renderBooks();window.scrollTo(0,0)}
 function confirmDlg(title,bodyHTML,onYes,yesLabel){$('dlgTitle').textContent=title;$('dlgBody').innerHTML=bodyHTML;
@@ -237,22 +237,39 @@ $('btn-cats-out').onclick=()=>openCatManager('out');
 /* ---------- books UI ---------- */
 $('topbar-title').onclick=e=>{if(e.target.closest('.topbar-btn'))return;navigate('books')};
 $('btn-books').onclick=()=>navigate('books');
-$('create-book-btn').onclick=()=>{const v=$('new-book-name').value.trim();if(!v)return toast('Enter book name','error');
-  createBook(v);$('new-book-name').value='';toast('Book created','success')};
+$('create-book-btn').onclick=()=>promptDlg('New book','',v=>{createBook(v);toast('Book created','success')},'Create');
+$('book-search').oninput=e=>{state.bookSearch=e.target.value.toLowerCase();renderBooks()};
 function bookBalance(id){let i=0,o=0;Object.values((state.books[id]||{}).transactions||{}).forEach(t=>{t.type==='in'?i+=+t.amount||0:o+=+t.amount||0});return{i,o,net:i-o}}
+function lastTxDate(id){const txs=Object.values((state.books[id]||{}).transactions||{});
+  let m='';txs.forEach(t=>{if((t.date||'')>m)m=t.date||''});return m}
+function fmtUpdated(ds){if(!ds)return'No entries yet';
+  return'Updated on '+new Date(ds+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+function timeFmt(ts){const d=new Date(+ts||Date.now());if(isNaN(d))return'';
+  return'at '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}).toLowerCase()}
 function renderBooks(){const box=$('book-list');if(!box)return;box.innerHTML='';
-  Object.entries(state.books).forEach(([id,b])=>{const bal=bookBalance(id);
+  const ids=Object.keys(state.books).filter(id=>(state.books[id].name||'').toLowerCase().includes(state.bookSearch));
+  $('book-count').textContent=ids.length?ids.length+' book'+(ids.length>1?'s':''):'';
+  if(!ids.length){box.innerHTML='<div class="empty">No books found.<br>Tap + Add new book to create one.</div>';return}
+  ids.forEach(id=>{const b=state.books[id];const bal=bookBalance(id);
     const n=Object.keys(b.transactions||{}).length;
-    const row=document.createElement('div');row.className='book-row'+(id===state.current?' active':'');
-    row.innerHTML='<span class="material-icons-round" style="color:var(--primary2)">book</span>'+
-      '<strong>'+esc(b.name)+'</strong><small>'+n+' entries • '+fmtMoney(bal.net)+'</small>';
-    const open=document.createElement('button');open.className='icon-mini';open.title='Open';
-    open.innerHTML='<span class="material-icons-round">open_in_new</span>';open.onclick=()=>switchBook(id);
-    const ed=document.createElement('button');ed.className='icon-mini';ed.title='Rename';
-    ed.innerHTML='<span class="material-icons-round">edit</span>';ed.onclick=()=>promptDlg('Rename book',b.name,v=>{renameBook(id,v);renderBooks()});
-    const del=document.createElement('button');del.className='icon-mini danger';del.title='Delete';
-    del.innerHTML='<span class="material-icons-round">delete</span>';del.onclick=()=>deleteBook(id);
-    row.append(open,ed,del);box.appendChild(row)})}
+    const row=document.createElement('div');row.className='apk-book'+(id===state.current?' active':'');
+    row.innerHTML='<div class="apk-book-ic"><span class="material-icons-round">book</span></div>'+
+      '<div class="apk-book-mid"><strong>'+esc(b.name)+'</strong><small>'+fmtUpdated(lastTxDate(id))+' • '+n+' entries</small></div>'+
+      '<div class="apk-book-amt">'+fmtMoney(bal.net)+'</div>'+
+      '<button class="tx-menu"><span class="material-icons-round">more_vert</span></button>';
+    row.onclick=e=>{if(e.target.closest('.tx-menu'))return;switchBook(id)};
+    row.querySelector('.tx-menu').onclick=()=>bookMenu(id);
+    box.appendChild(row)})}
+function bookMenu(id){const b=state.books[id];if(!b)return;
+  const o=$('modal-overlay');$('modal-title').textContent=b.name;
+  $('modal-body').innerHTML='<p style="color:var(--sub);font-size:13px">Open, rename or delete this book.</p>';
+  const F=$('modal-footer');F.innerHTML='';
+  const mk=(t,cls,fn)=>{const x=document.createElement('button');x.className=cls;x.textContent=t;
+    x.onclick=()=>{o.classList.remove('active');fn()};return x};
+  F.append(mk('Open','btn-cancel',()=>switchBook(id)),
+    mk('Rename','btn-cancel',()=>promptDlg('Rename book',b.name,v=>{renameBook(id,v);renderBooks()})),
+    mk('Delete','btn-danger',()=>deleteBook(id)));
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}}
 /* ---------- entries ---------- */
 $('cancel-edit-btn').onclick=()=>{state.editId=null;$('cancel-edit-btn').style.display='none';$('save-tx-btn').textContent='Save Entry';navigate('home')};
 $('save-tx-btn').onclick=saveTx;
@@ -279,50 +296,83 @@ function editTx(id){const t=curTxs()[id];if(!t)return;state.editId=id;setType(t.
 function delTx(id){confirmDlg('Delete entry?','<p>Remove this transaction permanently?</p>',()=>{
   if(state.demo){delete curBook().transactions[id];persistDemo();render();return}
   txPath().child(id).remove().then(()=>toast('Deleted','success'))})}
-/* ---------- list/dashboard ---------- */
-document.querySelectorAll('.filter-btn').forEach(b=>b.onclick=()=>{state.filter=b.dataset.filter;
-  document.querySelectorAll('.filter-btn').forEach(x=>x.classList.toggle('active',x===b));render()});
+/* ---------- list (APK book-detail style) ---------- */
+const FILTER_LABEL={all:'All Entries',in:'Cash In only',out:'Cash Out only'};
+function paintTypeLabel(){$('type-pick-label').textContent=FILTER_LABEL[state.filter]||'All Entries'}
+$('type-pick').onclick=()=>{const o=$('modal-overlay');$('modal-title').textContent='Entry Type';
+  $('modal-body').innerHTML='<p style="color:var(--sub);font-size:13px">Show which entries?</p>';
+  const F=$('modal-footer');F.innerHTML='';
+  Object.keys(FILTER_LABEL).forEach(k=>{const b=document.createElement('button');
+    b.className='btn-cancel';b.textContent=FILTER_LABEL[k];
+    if(state.filter===k)b.style.borderColor='var(--primary2)';
+    b.onclick=()=>{state.filter=k;paintTypeLabel();o.classList.remove('active');render()};F.appendChild(b)});
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}};
+$('sort-btn').onclick=()=>{state.sort=state.sort==='desc'?'asc':'desc';
+  toast(state.sort==='desc'?'Newest first':'Oldest first','info');render()};
 $('search-input').oninput=e=>{state.search=e.target.value.toLowerCase();render()};
 $('month-pick').onclick=()=>{const m=$('month-hidden');m.value=state.monthKey;
   m.onchange=()=>{if(m.value)state.monthKey=m.value;render()};if(m.showPicker)m.showPicker();else m.focus()};
 $('btn-refresh').onclick=()=>render();
+$('go-reports').onclick=()=>navigate('reports');
 function monthTxs(){return Object.entries(curTxs()).filter(([,t])=>(t.date||'').slice(0,7)===state.monthKey)}
+function runningBalances(){ // all-time chronological id → balance-after
+  const all=Object.entries(curTxs()).sort((a,b)=>(a[1].date||'').localeCompare(b[1].date||'')||((a[1].createdAt||0)-(b[1].createdAt||0)));
+  let bal=0;const map={};
+  all.forEach(([id,t])=>{bal+=t.type==='in'?(+t.amount||0):-(+t.amount||0);map[id]=bal});
+  return map}
 function render(){if(!state.user)return;const b=curBook();
   $('book-name-text').textContent=b?b.name:'—';
   $('dash-month').textContent=fmtMonth(state.monthKey);$('page-sub').textContent=fmtMonth(state.monthKey)+(b?' • '+b.name:'');
+  paintTypeLabel();
   const mtx=monthTxs();let tin=0,tout=0;
   mtx.forEach(([,t])=>{t.type==='in'?tin+=+t.amount||0:tout+=+t.amount||0});
   $('dash-in').textContent=fmtMoney(tin);$('dash-out').textContent=fmtMoney(tout);
   $('dash-balance').textContent=fmtMoney(tin-tout);
+  const runBal=runningBalances();
   let rows=mtx.filter(([,t])=>state.filter==='all'||t.type===state.filter);
-  if(state.search)rows=rows.filter(([,t])=>((t.note||'')+' '+(t.category||'')).toLowerCase().includes(state.search));
-  rows.sort((a,c)=>(c[1].date||'').localeCompare(a[1].date||'')||((c[1].createdAt||0)-(a[1].createdAt||0)));
+  if(state.search)rows=rows.filter(([,t])=>((t.note||'')+' '+(t.category||'')+' '+(t.amount||'')).toLowerCase().includes(state.search));
+  rows.sort((a,c)=>state.sort==='desc'
+    ?(c[1].date||'').localeCompare(a[1].date||'')||((c[1].createdAt||0)-(a[1].createdAt||0))
+    :(a[1].date||'').localeCompare(c[1].date||'')||((a[1].createdAt||0)-(c[1].createdAt||0)));
+  $('tx-count').textContent='Showing '+rows.length+' '+(rows.length===1?'entry':'entries');
   const box=$('tx-list');box.innerHTML='';
-  if(!rows.length)box.innerHTML='<div class="empty">No entries in <b>'+esc(b?b.name:'')+'</b> this month.<br>Tap + Add to record cash in / out.</div>';
+  if(!rows.length)box.innerHTML='<div class="empty">No entries in <b>'+esc(b?b.name:'')+'</b> here.<br>Use the buttons below to add Cash In / Out.</div>';
   let lastDay='';
+  const me=(state.user.displayName||(state.user.email||'You').split('@')[0]);
   rows.forEach(([id,t])=>{if(t.date!==lastDay){lastDay=t.date;
-      const g=document.createElement('div');g.className='day-group';
-      const day=rows.filter(([,x])=>x.date===lastDay);let dIn=0,dOut=0;
-      day.forEach(([,x])=>x.type==='in'?dIn+=+x.amount:dOut+=+x.amount);
-      g.innerHTML='<div class="day-head"><span>'+fmtDate(lastDay)+'</span><span>In '+fmtMoney(dIn)+' • Out '+fmtMoney(dOut)+'</span></div>';
-      g.id='g-'+lastDay;box.appendChild(g)}
-    const el=document.createElement('div');el.className='tx';
-    el.innerHTML='<div class="tx-ic '+t.type+'"><span class="material-icons-round">'+(t.type==='in'?'arrow_downward':'arrow_upward')+'</span></div>'+
-      '<div class="tx-mid"><strong>'+esc(t.category||(t.type==='in'?'Cash In':'Cash Out'))+'</strong><small>'+esc(t.note||t.method||'')+' • '+esc(t.method||'')+'</small></div>'+
-      '<div class="tx-amt '+t.type+'">'+(t.type==='in'?'+':'−')+' '+fmtMoney(t.amount)+'</div>';
-    const menu=document.createElement('button');menu.className='tx-menu';
-    menu.innerHTML='<span class="material-icons-round">more_vert</span>';menu.onclick=()=>txMenu(id);el.appendChild(menu);
-    ($('g-'+CSS.escape(lastDay))||box).appendChild(el)});
+      const h=document.createElement('p');h.className='apk-day';h.textContent=fmtDate(lastDay);box.appendChild(h)}
+    const el=document.createElement('div');el.className='apk-entry';
+    el.innerHTML='<div class="apk-entry-top"><div class="apk-chips"><span class="chip-cat">'+esc(t.category||(t.type==='in'?'Cash In':'Cash Out'))+'</span>'+
+      '<span class="chip-method">'+esc(t.method||'Cash')+'</span></div>'+
+      '<div class="apk-amt '+t.type+'">'+fmtMoney(t.amount)+'<small>Balance: '+fmtMoney(runBal[id]||0)+'</small></div></div>'+
+      (t.note?'<p class="apk-remark">'+esc(t.note)+'</p>':'')+
+      '<p class="apk-meta">Entry by '+esc(me)+' <span>'+esc(timeFmt(t.createdAt))+'</span></p>';
+    el.onclick=()=>txMenu(id);box.appendChild(el)});
   renderReports(mtx,tin,tout);if($('page-books').classList.contains('active'))renderBooks()}
-function txMenu(id){const o=$('modal-overlay');$('modal-title').textContent='Entry options';
-  const t=curTxs()[id]||{};
-  $('modal-body').innerHTML='<p style="color:var(--sub);font-size:13px">Edit or delete this transaction.</p>'+
-    (t.details?'<p style="margin-top:10px;font-size:13px;white-space:pre-wrap;max-height:200px;overflow:auto">'+esc(t.details)+'</p>':'');
+function txMenu(id){const o=$('modal-overlay');const t=curTxs()[id]||{};
+  const me=(state.user.displayName||(state.user.email||'You').split('@')[0]);
+  const when=(t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{day:'numeric',month:'short',year:'numeric'}):'')+(t.createdAt?', '+timeFmt(t.createdAt).replace(/^at /,''):'');
+  $('modal-title').textContent='Entry Details';
+  $('modal-body').innerHTML='<div class="apk-detail'+(t.type==='out'?' out':'')+'">'+
+    '<div class="apk-detail-top"><span>'+(t.type==='in'?'Cash In':'Cash Out')+'</span><span>'+esc(when)+'</span></div>'+
+    '<h2 class="'+t.type+'">'+fmtMoney(t.amount)+'</h2>'+
+    (t.note?'<p class="apk-detail-note">'+esc(t.note)+'</p>':'')+
+    '<div class="apk-chips"><span class="chip-cat">'+esc(t.category||'-')+'</span><span class="chip-method">'+esc(t.method||'Cash')+'</span></div>'+
+    (t.details?'<p class="apk-detail-full">'+esc(t.details)+'</p>':'')+
+    '<button class="apk-editbtn" id="detail-edit"><span class="material-icons-round">edit</span> Edit entry</button></div>'+
+    '<p class="apk-created">Created By<span>'+esc(me)+'</span></p>';
   const F=$('modal-footer');F.innerHTML='';
-  const e=document.createElement('button');e.className='btn-cancel';e.textContent='Edit';e.onclick=()=>{o.classList.remove('active');editTx(id)};
-  const d=document.createElement('button');d.className='btn-danger';d.textContent='Delete';d.onclick=()=>{o.classList.remove('active');delTx(id)};
-  const c=document.createElement('button');c.className='btn-cancel';c.textContent='Close';c.onclick=()=>o.classList.remove('active');
-  F.append(e,d,c);o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}}
+  const mk=(t2,cls,fn)=>{const x=document.createElement('button');x.className=cls;x.innerHTML=t2;
+    x.onclick=()=>{o.classList.remove('active');fn()};return x};
+  F.append(mk('<span class="material-icons-round" style="font-size:18px;vertical-align:-4px">share</span> Share entry','apk-share',()=>shareTx(id)),
+    mk('Delete','btn-danger',()=>delTx(id)));
+  $('detail-edit').onclick=()=>{o.classList.remove('active');editTx(id)};
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}}
+function shareTx(id){const t=curTxs()[id];if(!t)return;const b=curBook();
+  const text=(t.type==='in'?'Cash In':'Cash Out')+' '+fmtMoney(t.amount)+' • '+(t.category||'')+(t.note?' — '+t.note:'')+' ('+(b?b.name:'')+', '+t.date+')';
+  if(navigator.share)navigator.share({title:'Cashbook entry',text}).catch(()=>{});
+  else if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>toast('Copied to clipboard','success'));
+  else toast(text,'info')}
 function renderReports(mtx,tin,tout){
   $('report-month').innerHTML='<div class="rrow"><span>Cash In</span><strong style="color:var(--green)">'+fmtMoney(tin)+'</strong></div>'+
     '<div class="rrow"><span>Cash Out</span><strong style="color:var(--danger)">'+fmtMoney(tout)+'</strong></div>'+
@@ -668,8 +718,10 @@ function exportCSV(){const b=curBook();const rows=[['book','date','type','catego
 $('btn-export').onclick=exportCSV;$('btn-export2').onclick=exportCSV;
 /* ---------- nav ---------- */
 document.querySelectorAll('.bottom-nav-item').forEach(x=>x.onclick=()=>navigate(x.dataset.page));
-$('fab-add').onclick=()=>{state.editId=null;$('save-tx-btn').textContent='Save Entry';
-  $('cancel-edit-btn').style.display='none';$('f-amount').value='';$('f-note').value='';navigate('add')};
+function newEntry(type){state.editId=null;setType(type||'out');$('save-tx-btn').textContent='Save Entry';
+  $('cancel-edit-btn').style.display='none';$('f-amount').value='';$('f-note').value='';navigate('add')}
+$('go-add-in').onclick=()=>newEntry('in');
+$('go-add-out').onclick=()=>newEntry('out');
 $('dlg').addEventListener('click',e=>{if(e.target.id==='dlg')closeDlg()});
 setType('out');
 })();

@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="icon.png?v=3">
 <link rel="apple-touch-icon" href="icon.png?v=3">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=2.0">
+<link rel="stylesheet" href="style.css?v=2.1">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com">
 <link rel="preconnect" href="https://securetoken.googleapis.com">
@@ -109,26 +109,19 @@
   <main class="main-content">
     <!-- HOME -->
     <div class="page active" id="page-home">
-      <div class="balance-card">
-        <div class="balance-top"><small>Net Balance</small>
-          <button class="month-pick" id="month-pick"><strong id="dash-month">Oct 2026</strong><span class="material-icons-round">expand_more</span></button>
-        </div>
-        <h1 id="dash-balance">৳ 0</h1>
-        <div class="balance-row">
-          <div class="balance-box in"><span class="material-icons-round">arrow_downward</span><div><small>Cash In</small><strong id="dash-in">৳ 0</strong></div></div>
-          <div class="balance-box out"><span class="material-icons-round">arrow_upward</span><div><small>Cash Out</small><strong id="dash-out">৳ 0</strong></div></div>
-        </div>
+      <div class="apk-search"><span class="material-icons-round">search</span><input id="search-input" placeholder="Search by remark or amount"></div>
+      <div class="apk-filters">
+        <button class="apk-chipbtn" id="sort-btn" title="Sort order"><span class="material-icons-round">sort</span></button>
+        <button class="apk-chipbtn wide" id="month-pick"><span class="material-icons-round">calendar_month</span><span id="dash-month">Oct 2026</span><span class="material-icons-round">expand_more</span></button>
+        <button class="apk-chipbtn wide" id="type-pick"><span id="type-pick-label">All Entries</span><span class="material-icons-round">expand_more</span></button>
       </div>
-
-      <div class="filter-row">
-        <div class="filter-tabs">
-          <button class="filter-btn active" data-filter="all">All</button>
-          <button class="filter-btn" data-filter="in">Cash In</button>
-          <button class="filter-btn" data-filter="out">Cash Out</button>
-        </div>
-        <div class="search-wrap"><span class="material-icons-round">search</span><input id="search-input" placeholder="Search note / category"></div>
+      <div class="apk-summary">
+        <div class="apk-sumrow"><span>Net Balance</span><strong id="dash-balance">0</strong></div>
+        <div class="apk-sumrow"><span>Total In (+)</span><strong class="pos" id="dash-in">0</strong></div>
+        <div class="apk-sumrow"><span>Total Out (−)</span><strong class="neg" id="dash-out">0</strong></div>
+        <button class="apk-reports" id="go-reports">View Reports <span class="material-icons-round">chevron_right</span></button>
       </div>
-
+      <div class="apk-count"><span></span><p id="tx-count">Showing 0 entries</p><span></span></div>
       <div id="tx-list"></div>
     </div>
 
@@ -153,12 +146,10 @@
 
     <!-- BOOKS -->
     <div class="page" id="page-books">
-      <div class="form-card">
-        <h4 style="margin-bottom:10px">My Books</h4>
-        <div id="book-list"></div>
-        <div class="form-group" style="margin-top:14px"><label>New book name</label><input id="new-book-name" type="text" placeholder="e.g. Shop, Home…" maxlength="40"></div>
-        <button class="btn-primary" id="create-book-btn">Create Book</button>
-      </div>
+      <div class="apk-books-head"><h3>Your Books</h3><span id="book-count"></span></div>
+      <div class="apk-search"><span class="material-icons-round">search</span><input id="book-search" placeholder="Search books"></div>
+      <div id="book-list"></div>
+      <button class="apk-addbook" id="create-book-btn"><span class="material-icons-round">add</span> Add new book</button>
     </div>
 
     <!-- REPORTS -->
@@ -206,7 +197,10 @@
     </div>
   </main>
 
-  <button class="fab" id="fab-add"><span class="material-icons-round">add</span><span id="fab-label">Add</span></button>
+  <div class="apk-home-actions" id="home-actions">
+    <button class="apk-in" id="go-add-in"><span class="material-icons-round">add</span> Cash In</button>
+    <button class="apk-out" id="go-add-out"><span class="material-icons-round">remove</span> Cash Out</button>
+  </div>
 
   <nav class="bottom-nav" id="bottom-nav">
     <div class="bottom-nav-items">
@@ -228,6 +222,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=2.0"></script>
+<script src="app.js?v=2.1"></script>
 </body>
 </html>
