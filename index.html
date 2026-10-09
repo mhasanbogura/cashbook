@@ -97,7 +97,8 @@
 <!-- APP -->
 <div id="app-screen" class="screen">
   <header class="topbar">
-    <div class="topbar-title" id="topbar-title"><h2 id="page-title">Cashbook</h2><p id="page-sub">October 2026</p></div>
+    <div class="topbar-title" id="topbar-title" style="cursor:pointer"><h2 id="page-title">Cashbook</h2><p id="page-sub">October 2026</p>
+      <p id="book-name" style="font-weight:700;color:var(--primary2)"><span class="material-icons-round" style="font-size:14px;vertical-align:-2px">book</span> <span id="book-name-text">My Book</span> <span class="material-icons-round" style="font-size:14px;vertical-align:-2px">expand_more</span></p></div>
     <div class="topbar-actions">
       <button class="topbar-btn" id="btn-export" title="Export CSV"><span class="material-icons-round">download</span></button>
       <button class="topbar-btn" id="btn-refresh" title="Refresh"><span class="material-icons-round">refresh</span></button>
@@ -138,7 +139,7 @@
           <button id="type-out" class="type-btn out"><span class="material-icons-round">remove</span> Cash Out</button>
         </div>
         <div class="amount-wrap"><span>৳</span><input id="f-amount" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></div>
-        <div class="form-group"><label>Category</label><div class="chip-row" id="cat-row"></div></div>
+        <div class="form-group"><label style="display:flex;align-items:center;justify-content:space-between">Category <button class="btn-link-blue" id="manage-cats-btn" type="button">Manage</button></label><div class="chip-row" id="cat-row"></div></div>
         <div class="form-row">
           <div class="form-group"><label>Date</label><input id="f-date" type="date"></div>
           <div class="form-group"><label>Method</label><select id="f-method"><option>Cash</option><option>bKash</option><option>Nagad</option><option>Rocket</option><option>Bank</option><option>Card</option></select></div>
@@ -146,6 +147,16 @@
         <div class="form-group"><label>Note (optional)</label><input id="f-note" type="text" placeholder="e.g. Shop sale, lunch…" maxlength="80"></div>
         <button class="btn-primary" id="save-tx-btn">Save Entry</button>
         <button class="btn-text" id="cancel-edit-btn" style="display:none">Cancel editing</button>
+      </div>
+    </div>
+
+    <!-- BOOKS -->
+    <div class="page" id="page-books">
+      <div class="form-card">
+        <h4 style="margin-bottom:10px">My Books</h4>
+        <div id="book-list"></div>
+        <div class="form-group" style="margin-top:14px"><label>New book name</label><input id="new-book-name" type="text" placeholder="e.g. Shop, Home…" maxlength="40"></div>
+        <button class="btn-primary" id="create-book-btn">Create Book</button>
       </div>
     </div>
 
@@ -166,13 +177,19 @@
         <div class="settings-row"><span class="material-icons-round">payments</span> Currency <strong style="margin-left:auto">৳ BDT</strong></div>
       </div>
       <div class="settings-card">
+        <div class="settings-title">BOOKS & CATEGORIES</div>
+        <button class="settings-row btn" id="btn-books"><span class="material-icons-round">book</span> My books &amp; switch book</button>
+        <button class="settings-row btn" id="btn-cats-in"><span class="material-icons-round">arrow_downward</span> Cash In categories</button>
+        <button class="settings-row btn" id="btn-cats-out"><span class="material-icons-round">arrow_upward</span> Cash Out categories</button>
+      </div>
+      <div class="settings-card">
         <div class="settings-title">ACCOUNT</div>
         <button class="settings-row btn" id="btn-export2"><span class="material-icons-round">download</span> Export CSV</button>
         <button class="settings-row btn" id="btn-reset-link"><span class="material-icons-round">lock_reset</span> Reset password</button>
         <button class="settings-row btn" id="btn-logout"><span class="material-icons-round">logout</span> Log out</button>
         <button class="settings-row btn danger" id="btn-delete"><span class="material-icons-round">delete_forever</span> Delete account &amp; data</button>
       </div>
-      <p class="version">Cashbook Web v1.0 • Firebase RTDB</p>
+      <p class="version">Cashbook Web v1.1 • Firebase RTDB • multi-book</p>
     </div>
   </main>
 
@@ -180,6 +197,7 @@
 
   <nav class="bottom-nav" id="bottom-nav">
     <button class="nav-btn active" data-page="home"><span class="material-icons-round">home</span><small>Home</small></button>
+    <button class="nav-btn" data-page="books"><span class="material-icons-round">book</span><small>Books</small></button>
     <button class="nav-btn" data-page="add"><span class="material-icons-round">add_circle</span><small>Add</small></button>
     <button class="nav-btn" data-page="reports"><span class="material-icons-round">bar_chart</span><small>Reports</small></button>
     <button class="nav-btn" data-page="settings"><span class="material-icons-round">settings</span><small>Settings</small></button>
