@@ -44,7 +44,6 @@ function promptDlg(title,initial,onOk,okLabel){$('dlgTitle').textContent=title;
 const sysDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');
 function applyTheme(){const device=$('set-device').checked;const oled=$('set-oled').checked;
   const dark=oled||(device?(sysDark?sysDark.matches:true):false);
-  $('set-oled').disabled=!dark&&!oled;
   document.documentElement.dataset.theme=!dark?'light':(oled?'oled':'dark');
   try{localStorage.setItem('cb-theme',JSON.stringify({device,oled}))}catch(e){}}
 function initTheme(){try{const t=JSON.parse(localStorage.getItem('cb-theme')||'null');
