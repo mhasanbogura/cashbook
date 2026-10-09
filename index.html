@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
 <title>Cashbook — Balance & Expense</title>
-<link rel="icon" type="image/svg+xml" href="app-icon.svg">
+<link rel="icon" type="image/png" href="app-icon.png">
+<link rel="apple-touch-icon" href="app-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
@@ -15,7 +16,7 @@
 <body>
 <!-- SPLASH -->
 <div id="splash-screen" class="splash-screen">
-  <img src="app-icon.svg" alt="Cashbook" class="splash-icon">
+  <img src="app-icon.png" alt="Cashbook" class="splash-icon">
   <div class="spinner"></div>
   <div id="offline-warning" class="offline-card" style="display:none">
     <span class="material-icons-round" style="color:#ff6b6b;font-size:20px">wifi_off</span>
@@ -27,7 +28,7 @@
 <div id="auth-screen" class="screen">
   <div class="auth-container">
     <div class="auth-header">
-      <img src="app-icon.svg" alt="Cashbook" class="auth-logo-img">
+      <img src="app-icon.png" alt="Cashbook" class="auth-logo-img">
       <h1>Cashbook</h1>
       <p>Balance &amp; Expense, simply</p>
     </div>
@@ -196,11 +197,13 @@
   <button class="fab" id="fab-add"><span class="material-icons-round">add</span><span id="fab-label">Add</span></button>
 
   <nav class="bottom-nav" id="bottom-nav">
-    <button class="nav-btn active" data-page="home"><span class="material-icons-round">home</span><small>Home</small></button>
-    <button class="nav-btn" data-page="books"><span class="material-icons-round">book</span><small>Books</small></button>
-    <button class="nav-btn" data-page="add"><span class="material-icons-round">add_circle</span><small>Add</small></button>
-    <button class="nav-btn" data-page="reports"><span class="material-icons-round">bar_chart</span><small>Reports</small></button>
-    <button class="nav-btn" data-page="settings"><span class="material-icons-round">settings</span><small>Settings</small></button>
+    <div class="bottom-nav-items">
+      <button class="bottom-nav-item active" data-page="home"><span class="material-icons-round">home</span><span>Home</span></button>
+      <button class="bottom-nav-item" data-page="books"><span class="material-icons-round">book</span><span>Books</span></button>
+      <button class="bottom-nav-item" data-page="add"><span class="material-icons-round">add_circle</span><span>Add</span></button>
+      <button class="bottom-nav-item" data-page="reports"><span class="material-icons-round">bar_chart</span><span>Reports</span></button>
+      <button class="bottom-nav-item" data-page="settings"><span class="material-icons-round">settings</span><span>Settings</span></button>
+    </div>
   </nav>
 </div>
 

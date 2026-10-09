@@ -24,7 +24,7 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classL
   window.scrollTo(0,0);if(id==='app-screen')$('splash-screen').classList.add('hidden')}
 function navigate(page){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=$('page-'+page);if(el)el.classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+  document.querySelectorAll('.bottom-nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   $('fab-add').style.display=(page==='home')?'flex':'none';
   $('page-title').textContent={home:'Cashbook',books:'My Books',add:state.editId?'Edit Entry':'Add Entry',reports:'Reports',settings:'Settings'}[page]||'Cashbook';
   if(page==='books')renderBooks();window.scrollTo(0,0)}
@@ -327,7 +327,7 @@ function exportCSV(){const b=curBook();const rows=[['book','date','type','catego
   a.download='cashbook-'+(b?b.name.replace(/\s+/g,'-'):'book')+'-'+state.monthKey+'.csv';a.click();toast('CSV exported','success')}
 $('btn-export').onclick=exportCSV;$('btn-export2').onclick=exportCSV;
 /* ---------- nav ---------- */
-document.querySelectorAll('.nav-btn').forEach(x=>x.onclick=()=>navigate(x.dataset.page));
+document.querySelectorAll('.bottom-nav-item').forEach(x=>x.onclick=()=>navigate(x.dataset.page));
 $('fab-add').onclick=()=>{state.editId=null;$('save-tx-btn').textContent='Save Entry';
   $('cancel-edit-btn').style.display='none';$('f-amount').value='';$('f-note').value='';navigate('add')};
 $('dlg').addEventListener('click',e=>{if(e.target.id==='dlg')closeDlg()});
