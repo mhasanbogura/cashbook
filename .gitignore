@@ -1,0 +1,7 @@
+# CashBook web app — only web files are tracked
+*.apkm
+*.apk
+extracted/
+base_decoded/
+base_unzipped/
+.DS_Store

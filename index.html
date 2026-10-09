@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<title>Cashbook — Balance & Expense</title>
+<link rel="icon" type="image/svg+xml" href="app-icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://securetoken.googleapis.com">
+</head>
+<body>
+<!-- SPLASH -->
+<div id="splash-screen" class="splash-screen">
+  <img src="app-icon.svg" alt="Cashbook" class="splash-icon">
+  <div class="spinner"></div>
+  <div id="offline-warning" class="offline-card" style="display:none">
+    <span class="material-icons-round" style="color:#ff6b6b;font-size:20px">wifi_off</span>
+    <span style="color:#ff6b6b;font-size:14px">No internet connection.</span>
+  </div>
+</div>
+
+<!-- AUTH WELCOME -->
+<div id="auth-screen" class="screen">
+  <div class="auth-container">
+    <div class="auth-header">
+      <img src="app-icon.svg" alt="Cashbook" class="auth-logo-img">
+      <h1>Cashbook</h1>
+      <p>Balance &amp; Expense, simply</p>
+    </div>
+    <div class="auth-welcome-card">
+      <div class="auth-welcome-title"><h2>Welcome</h2><p>Log in to sync your cashbook across devices</p></div>
+      <button class="btn-auth-dark" id="show-login-btn"><span class="material-icons-round">login</span> Login with Email</button>
+      <button class="btn-auth-google" id="google-login-welcome">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Login with Google
+      </button>
+      <div class="auth-welcome-footer">Don't have an account? <button class="btn-link-blue" id="show-register-welcome">Sign up</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="auth-login-screen" class="screen">
+  <div class="auth-container">
+    <div class="auth-header"><h1>Welcome Back</h1></div>
+    <div class="auth-card">
+      <div class="input-group"><span class="material-icons-round">email</span><input type="email" id="login-email" placeholder="Email address" autocomplete="email"></div>
+      <div class="input-group"><span class="material-icons-round">lock</span><input type="password" id="login-password" placeholder="Password" autocomplete="current-password"></div>
+      <button class="btn-auth-dark" id="login-btn">Log in</button>
+      <button class="btn-auth-google" id="google-login-email">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Continue with Google
+      </button>
+      <button class="btn-link-inline" id="forgot-password-link">Forgot Password?</button>
+      <div class="auth-divider"><span>or</span></div>
+      <button class="btn-auth-dark" id="show-register-login" style="background:linear-gradient(135deg,#555,#333)">Not registered? Sign Up</button>
+      <button class="btn-text" id="back-to-welcome-login">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER -->
+<div id="auth-register-screen" class="screen">
+  <div class="auth-container">
+    <div class="auth-header"><h1>Create New Account</h1></div>
+    <div class="auth-card">
+      <div class="input-group"><span class="material-icons-round">person</span><input type="text" id="reg-name" placeholder="Full name" autocomplete="name"></div>
+      <div class="input-group"><span class="material-icons-round">email</span><input type="email" id="reg-email" placeholder="Email address" autocomplete="email"></div>
+      <div class="input-group"><span class="material-icons-round">lock</span><input type="password" id="reg-password" placeholder="Password (min 6 chars)" autocomplete="new-password"></div>
+      <button class="btn-auth-dark" id="register-btn">SIGN UP</button>
+      <button class="btn-auth-google" id="google-register">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Sign up with Google
+      </button>
+      <div class="auth-divider"><span>or</span></div>
+      <button class="btn-auth-dark" id="back-to-login-login" style="background:linear-gradient(135deg,#555,#333)">Already have account? Log In</button>
+    </div>
+  </div>
+</div>
+
+<!-- FORGOT -->
+<div id="forgot-screen" class="screen">
+  <div class="auth-container">
+    <div class="auth-header"><h1>Forgot Password</h1><p>We'll send you a reset link</p></div>
+    <div class="auth-card">
+      <div class="input-group"><span class="material-icons-round">email</span><input type="email" id="reset-email" placeholder="Your email address"></div>
+      <button class="btn-auth-dark" id="send-reset-btn">NEXT</button>
+      <button class="btn-text" id="back-to-login-forgot">← Back to Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" class="screen">
+  <header class="topbar">
+    <div class="topbar-title" id="topbar-title"><h2 id="page-title">Cashbook</h2><p id="page-sub">October 2026</p></div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" id="btn-export" title="Export CSV"><span class="material-icons-round">download</span></button>
+      <button class="topbar-btn" id="btn-refresh" title="Refresh"><span class="material-icons-round">refresh</span></button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <!-- HOME -->
+    <div class="page active" id="page-home">
+      <div class="balance-card">
+        <div class="balance-top"><small>Net Balance</small>
+          <button class="month-pick" id="month-pick"><strong id="dash-month">Oct 2026</strong><span class="material-icons-round">expand_more</span></button>
+        </div>
+        <h1 id="dash-balance">৳ 0</h1>
+        <div class="balance-row">
+          <div class="balance-box in"><span class="material-icons-round">arrow_downward</span><div><small>Cash In</small><strong id="dash-in">৳ 0</strong></div></div>
+          <div class="balance-box out"><span class="material-icons-round">arrow_upward</span><div><small>Cash Out</small><strong id="dash-out">৳ 0</strong></div></div>
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-tabs">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="in">Cash In</button>
+          <button class="filter-btn" data-filter="out">Cash Out</button>
+        </div>
+        <div class="search-wrap"><span class="material-icons-round">search</span><input id="search-input" placeholder="Search note / category"></div>
+      </div>
+
+      <div id="tx-list"></div>
+    </div>
+
+    <!-- ADD -->
+    <div class="page" id="page-add">
+      <div class="form-card">
+        <div class="type-toggle">
+          <button id="type-in" class="type-btn in active"><span class="material-icons-round">add</span> Cash In</button>
+          <button id="type-out" class="type-btn out"><span class="material-icons-round">remove</span> Cash Out</button>
+        </div>
+        <div class="amount-wrap"><span>৳</span><input id="f-amount" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></div>
+        <div class="form-group"><label>Category</label><div class="chip-row" id="cat-row"></div></div>
+        <div class="form-row">
+          <div class="form-group"><label>Date</label><input id="f-date" type="date"></div>
+          <div class="form-group"><label>Method</label><select id="f-method"><option>Cash</option><option>bKash</option><option>Nagad</option><option>Rocket</option><option>Bank</option><option>Card</option></select></div>
+        </div>
+        <div class="form-group"><label>Note (optional)</label><input id="f-note" type="text" placeholder="e.g. Shop sale, lunch…" maxlength="80"></div>
+        <button class="btn-primary" id="save-tx-btn">Save Entry</button>
+        <button class="btn-text" id="cancel-edit-btn" style="display:none">Cancel editing</button>
+      </div>
+    </div>
+
+    <!-- REPORTS -->
+    <div class="page" id="page-reports">
+      <div class="report-card"><h4>This month</h4><div id="report-month"></div></div>
+      <div class="report-card"><h4>Top categories</h4><div id="report-cats"></div></div>
+      <div class="report-card"><h4>Last 6 months</h4><div id="report-history"></div></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="profile-card"><div class="avatar-big" id="prof-avatar">C</div><div><h3 id="prof-name">User</h3><p id="prof-email">-</p></div></div>
+      <div class="settings-card">
+        <div class="settings-title">GENERAL</div>
+        <label class="settings-row"><span class="material-icons-round">dark_mode</span> Dark Theme <span class="switch"><input type="checkbox" id="set-dark" checked><span class="slider"></span></span></label>
+        <label class="settings-row"><span class="material-icons-round">contrast</span> OLED Black <span class="switch"><input type="checkbox" id="set-oled" checked><span class="slider"></span></span></label>
+        <div class="settings-row"><span class="material-icons-round">payments</span> Currency <strong style="margin-left:auto">৳ BDT</strong></div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-title">ACCOUNT</div>
+        <button class="settings-row btn" id="btn-export2"><span class="material-icons-round">download</span> Export CSV</button>
+        <button class="settings-row btn" id="btn-reset-link"><span class="material-icons-round">lock_reset</span> Reset password</button>
+        <button class="settings-row btn" id="btn-logout"><span class="material-icons-round">logout</span> Log out</button>
+        <button class="settings-row btn danger" id="btn-delete"><span class="material-icons-round">delete_forever</span> Delete account &amp; data</button>
+      </div>
+      <p class="version">Cashbook Web v1.0 • Firebase RTDB</p>
+    </div>
+  </main>
+
+  <button class="fab" id="fab-add"><span class="material-icons-round">add</span><span id="fab-label">Add</span></button>
+
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="nav-btn active" data-page="home"><span class="material-icons-round">home</span><small>Home</small></button>
+    <button class="nav-btn" data-page="add"><span class="material-icons-round">add_circle</span><small>Add</small></button>
+    <button class="nav-btn" data-page="reports"><span class="material-icons-round">bar_chart</span><small>Reports</small></button>
+    <button class="nav-btn" data-page="settings"><span class="material-icons-round">settings</span><small>Settings</small></button>
+  </nav>
+</div>
+
+<div class="modal-overlay" id="modal-overlay"><div class="modal"><h3 id="modal-title"></h3><div id="modal-body"></div><div class="modal-actions" id="modal-footer"></div></div></div>
+<div id="dlg" class="dialog-wrap" hidden><div class="dialog"><h3 id="dlgTitle"></h3><div id="dlgBody"></div><div id="dlgActions" class="dialog-actions"></div></div></div>
+<div id="toast-container"></div>
+<input type="month" id="month-hidden" style="position:fixed;opacity:0;pointer-events:none;top:0">
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
