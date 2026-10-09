@@ -43,14 +43,18 @@ function promptDlg(title,initial,onOk,okLabel){$('dlgTitle').textContent=title;
 /* ---------- theme (same as mess manager: Device + OLED) ---------- */
 const sysDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');
 function applyTheme(){const device=$('set-device').checked;const oled=$('set-oled').checked;
-  const dark=device?(sysDark?sysDark.matches:true):false;
-  $('set-oled').disabled=!dark;
+  const dark=oled||(device?(sysDark?sysDark.matches:true):false);
+  $('set-oled').disabled=!dark&&!oled;
   document.documentElement.dataset.theme=!dark?'light':(oled?'oled':'dark');
   try{localStorage.setItem('cb-theme',JSON.stringify({device,oled}))}catch(e){}}
-(function initTheme(){try{const t=JSON.parse(localStorage.getItem('cb-theme')||'null');
-  if(t){$('set-device').checked=t.device!==false;$('set-oled').checked=t.oled!==false}}catch(e){}
-  applyTheme();$('set-device').onchange=applyTheme;$('set-oled').onchange=applyTheme;
-  if(sysDark&&sysDark.addEventListener)sysDark.addEventListener('change',()=>{if($('set-device').checked)applyTheme()})})();
+function initTheme(){try{const t=JSON.parse(localStorage.getItem('cb-theme')||'null');
+  if(t){$('set-device').checked=t.device!==false;$('set-oled').checked=t.oled!==false;
+    if($('set-device').checked&&$('set-oled').checked)$('set-device').checked=false}}catch(e){}
+  applyTheme();
+  $('set-device').onchange=()=>{if($('set-device').checked)$('set-oled').checked=false;applyTheme()};
+  $('set-oled').onchange=()=>{if($('set-oled').checked)$('set-device').checked=false;applyTheme()};
+  if(sysDark&&sysDark.addEventListener)sysDark.addEventListener('change',()=>{if($('set-device').checked)applyTheme()})}
+initTheme();
 /* ---------- currency (BDT / USD, synced per user) ---------- */
 function curSym(){return state.currency==='usd'?'$':'৳'}
 function fmtMoney(n){return curSym()+' '+Number(n||0).toLocaleString('en-US')}

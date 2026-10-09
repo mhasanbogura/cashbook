@@ -139,7 +139,7 @@ body{font-family:'Times New Roman',serif;background:var(--bg);color:var(--text);
 [data-theme="dark"] .lang-toggle .lt-slider,[data-theme="oled"] .lang-toggle .lt-slider{background:#333;box-shadow:2px 2px 4px rgba(0,0,0,.4),-1px -1px 3px rgba(255,255,255,.05)}
 .lang-toggle[data-cur="usd"] .lt-slider{left:calc(50% - 3px)}
 .lang-toggle[data-cur="bdt"] .lt-slider{left:3px}
-.lang-toggle .lt-label{position:relative;z-index:1;padding:0 14px;font-size:13px;font-weight:700;line-height:30px;color:#333;transition:color .2s;white-space:nowrap;display:flex;align-items:center;justify-content:center;flex:1}
+.lang-toggle .lt-label{position:relative;z-index:3;padding:0 14px;font-size:13px;font-weight:700;line-height:30px;color:#333;transition:color .2s;white-space:nowrap;display:flex;align-items:center;justify-content:center;flex:1}
 .lang-toggle .lt-label.active{color:var(--primary)}
 [data-theme="oled"] .lang-toggle .lt-label,[data-theme="dark"] .lang-toggle .lt-label{color:#aaa}
 [data-theme="oled"] .lang-toggle .lt-label.active,[data-theme="dark"] .lang-toggle .lt-label.active{color:#fff}
