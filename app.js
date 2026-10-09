@@ -407,11 +407,14 @@ function buildPdfRows(pages,fileName){
   const isHeaderTxt=t=>{const l=t.toLowerCase();let h=0;
     if(l.includes('date'))h++;if(l.includes('notes'))h++;
     if(l.includes('description')||l.includes('category'))h++;if(l.includes('cash'))h++;if(l.includes('balance'))h++;return h>=4};
-  // 1) locate header band + column x-centres
-  let HC=null;
-  for(const items of pages){if(HC)break;
-    bandItems(items,3).forEach(b=>{if(HC)return;
-      const txt=norm(b.items.map(i=>i.s).join(' '));if(!isHeaderTxt(txt))return;
+  // 1) locate header band (+ merged neighbour pairs for wrapped headers) + column x-centres
+  let HC=null;const debug={pages:pages.length,bands:0,header:false,records:0};
+  const findHC=bands=>{
+    for(let bi=0;bi<bands.length&&!HC;bi++){
+      const cands=[bands[bi]];
+      if(bi+1<bands.length)cands.push({y:bands[bi].y,items:[...bands[bi].items,...bands[bi+1].items].sort((a,c)=>a.x-c.x)});
+      for(const b of cands){if(HC)break;
+        const txt=norm(b.items.map(i=>i.s).join(' '));if(!isHeaderTxt(txt))continue;
       const at=kw=>{const f=b.items.find(i=>i.s.toLowerCase().includes(kw));return f?f.x:null};
       let dateX=at('date'),notesX=at('notes');
       let descX=at('description');if(descX===null)descX=at('category');
@@ -422,14 +425,15 @@ function buildPdfRows(pages,fileName){
       if(cash.length>=2&&inX!==null&&outX!==null){/* classified */}
       else if(cash.length>=2){inX=cash[0].x;outX=cash[cash.length-1].x}
       const balX=at('balance');
-      if(dateX===null||notesX===null||balX===null)return;
+      if(dateX===null||notesX===null||balX===null)continue;
       const gaps=[notesX-dateX,descX!==null?descX-notesX:0].filter(g=>g>0);
       const avg=gaps.length?gaps.reduce((a,c)=>a+c,0)/gaps.length:80;
-      HC={dateX,notesX,descX:descX===null?notesX+avg:descX,inX:outX!==null&&inX===null?null:inX,outX,balX,serialMax:dateX-avg/2,
-        order:[['date',dateX],['notes',notesX],['desc',descX===null?notesX+avg:descX]].sort((a,c)=>a[1]-c[1])};
+      HC={dateX,notesX,descX:descX===null?notesX+avg:descX,inX:outX!==null&&inX===null?null:inX,outX,balX,serialMax:dateX-avg/2};
       if(HC.inX===null&&HC.outX!==null)HC.inX=HC.outX-avg;
-      if(HC.outX===null&&HC.inX!==null)HC.outX=HC.inX+avg})}
-  if(!HC)return[];
+      if(HC.outX===null&&HC.inX!==null)HC.outX=HC.inX+avg;
+      debug.header=true}}};
+  pages.forEach(items=>{debug.bands+=bandItems(items,3).length;findHC(bandItems(items,3))});
+  if(!HC)return{rows:[],debug};
   const colOf=x=>{if(x<HC.serialMax+2)return 0;
     const c=[HC.dateX,HC.notesX,HC.descX,HC.inX,HC.outX,HC.balX];
     let bi=0,bd=1e12;c.forEach((cx,i)=>{const d=Math.abs(x-cx);if(d<bd){bd=d;bi=i}});
@@ -440,18 +444,21 @@ function buildPdfRows(pages,fileName){
     if(isHeaderTxt(t)||book)return;const m=t.match(/^(\d{1,2})\.\s*(.+)$/);if(m)book=(m[1]+'. '+m[2]).slice(0,60)});
   if(!book){const base=fileName.replace(/\.(pdf|PDF)$/,'').replace(/(\d{2}-[A-Za-z]{3}-\d{4}).*$/,'$1').trim();
     book=(base||'Imported').slice(0,60)}
-  // 3) walk bands → records anchored by serial numbers
-  const recs=[];let cur=null,headerSeen=false;
-  const pushBand=(b,firstPage)=>{
+  // 3) walk bands → records anchored by serial numbers or row dates
+  const recs=[];let cur=null;
+  const hasDate=t=>/\d{1,2}-[A-Za-z]{3}-\d{4}/.test(t);
+  const pushBand=b=>{
     const cells=[[],[],[],[],[],[],[]];
     b.items.forEach(it=>cells[colOf(it.x)].push(it.s));
     const txt=norm(cells.flat().join(' '));
-    if(isHeaderTxt(txt)){headerSeen=true;return}
-    if(/total\s*cash/i.test(txt))return;
+    if(isHeaderTxt(txt))return;
+    if(/total/i.test(txt))return;
     const serial=norm(cells[0].join(' '));
-    if(/^\d{1,4}$/.test(serial)){cur={cells:cells.map(c=>[...c]),serial};recs.push(cur)}
+    if(/^\d{1,4}$/.test(serial)||hasDate(txt))startRec(cells,serial);
     else if(cur){cells.forEach((c,i)=>{if(c.length)cur.cells[i].push(...c)})}};
-  pages.forEach((items,pi)=>bandItems(items,3).forEach(b=>pushBand(b,pi===0)));
+  const startRec=(cells,serial)=>{cur={cells:cells.map(c=>[...c]),serial:/^\d{1,4}$/.test(serial)?serial:''};
+    recs.push(cur);debug.records++};
+  pages.forEach(items=>bandItems(items,3).forEach(pushBand));
   // 4) records → canonical rows
   const parseAmt=s=>{const v=parseFloat((''+s).replace(/,/g,''));return isNaN(v)?0:v};
   const out=[];
@@ -464,10 +471,11 @@ function buildPdfRows(pages,fileName){
     if(!(ci>0)&&!(co>0))return;
     const type=ci>0?'in':'out';
     const desc=j(3).replace(/\s*\n\s*/g,'\n');
-    out.push({id:'pdf-'+book.replace(/[^\w]+/g,'')+'-'+r.serial,date,
+    const slug=book.replace(/[^\w]+/g,'');
+    out.push({id:'pdf-'+slug+'-'+(r.serial||(date+'-'+ci+'-'+co)).replace(/[^\w.-]+/g,''),date,
       cash_in:ci,cash_out:co,notes:j(2),description:desc,accounts:book,
       isDeleted:0,transactionType:type==='in'?1:2,balance:parseAmt(j(6))})});
-  return out}
+  return{rows:out,debug}}
 function readPdfFile(file){return file.arrayBuffer().then(buf=>loadPdfJs().then(async pdfjs=>{
   const pdf=await pdfjs.getDocument({data:new Uint8Array(buf)}).promise;
   const pages=[];const n=Math.min(pdf.numPages,80);
@@ -475,11 +483,12 @@ function readPdfFile(file){return file.arrayBuffer().then(buf=>loadPdfJs().then(
     pages.push((await pg.getTextContent()).items
       .map(it=>({x:it.transform[4],y:it.transform[5],s:it.str||''})).filter(o=>o.s.trim()))}
   try{pdf.destroy()}catch(e){}
-  let rows=buildPdfRows(pages,file.name);
+  const built=buildPdfRows(pages,file.name);
+  let rows=built.rows,why='read '+built.debug.pages+'p/'+built.debug.bands+' bands, header '+(built.debug.header?'found':'MISSING')+', records '+built.debug.records;
   if(!rows.length){ // fall back to plain-text table scan
     const text=pages.map(pg=>pg.map(o=>o.s).join(' ')).join('\n');
     rows=tableFromText(text)}
-  if(!rows.length)throw new Error('no transaction table found');return rows}))}
+  if(!rows.length)throw new Error('no transaction table found ('+why+')');return rows}))}
 function methodForAccount(name){const n=(name||'').toLowerCase();
   if(n.includes('bkash'))return'bKash';if(n.includes('nagad'))return'Nagad';
   if(n.includes('rocket'))return'Rocket';if(n.includes('cash'))return'Cash';
