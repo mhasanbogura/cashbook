@@ -21,12 +21,20 @@ function toast(msg,type){type=type||'info';const c=$('toast-container');const el
   el.className='toast '+type;el.textContent=msg;c.appendChild(el);setTimeout(()=>{el.style.opacity='0';setTimeout(()=>el.remove(),300)},2600)}
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));$(id).classList.add('active');
   window.scrollTo(0,0);if(id==='app-screen')$('splash-screen').classList.add('hidden')}
-function navigate(page){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+function navigate(page,push){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=$('page-'+page);if(el)el.classList.add('active');
   document.querySelectorAll('.bottom-nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   $('home-actions').classList.toggle('show',page==='home');
   $('page-title').textContent={home:'Cashbook',books:'My Books',filters:'Filters',add:state.editId?'Edit Entry':'Add Entry',reports:'Reports',settings:'Settings'}[page]||'Cashbook';
+  state.page=page;
+  if(push!==false){try{history.pushState({page},'')}catch(e){}}
   if(page==='books')renderBooks();window.scrollTo(0,0)}
+let modalCloser=null;
+function setModalCloser(fn){modalCloser=fn}
+function clearModalCloser(){modalCloser=null}
+window.addEventListener('popstate',()=>{
+  if(modalCloser){const c=modalCloser;modalCloser=null;c();return}
+  if(state.page&&state.page!=='home'&&state.user)navigate('home',false)});
 function confirmDlg(title,bodyHTML,onYes,yesLabel){$('dlgTitle').textContent=title;$('dlgBody').innerHTML=bodyHTML;
   const A=$('dlgActions');A.innerHTML='';
   const no=document.createElement('button');no.className='btn secondary';no.textContent='Cancel';no.onclick=closeDlg;
@@ -115,7 +123,7 @@ if(firebaseReady()){
   setTimeout(()=>{if(!state.user){$('splash-screen').classList.add('hidden');
     if(!$('auth-screen').classList.contains('active'))showScreen('auth-screen')}},3500);
 }else{showScreen('auth-screen');$('splash-screen').classList.add('hidden')}
-function afterLogin(){showScreen('app-screen');navigate('home');
+function afterLogin(){showScreen('app-screen');navigate('home',false);
   const name=state.user.displayName||(state.user.email||'User').split('@')[0];
   $('prof-name').textContent=name;$('prof-email').textContent=state.user.email||'demo mode';
   $('prof-avatar').textContent=(name[0]||'C').toUpperCase();
@@ -169,7 +177,7 @@ function createBook(name,silent){name=(name||'').trim()||'My Book';
     firebase.database().ref('cashbook/'+uid()+'/currentBook').set(ref.key)}).catch(e=>toast(e.message,'error'))}
 function switchBook(id){if(!state.books[id])return;state.current=id;
   if(state.demo){persistDemo()}else{firebase.database().ref('cashbook/'+uid()+'/currentBook').set(id)}
-  state.editId=null;renderCats();render();navigate('home')}
+  state.editId=null;renderCats();render();navigate('home',false)}
 function renameBook(id,name){name=(name||'').trim();if(!name)return;
   if(state.demo){state.books[id].name=name;persistDemo();render();return}
   bookRef(id).child('name').set(name).catch(e=>toast(e.message,'error'))}
@@ -264,14 +272,20 @@ function bookMenu(id){const b=state.books[id];if(!b)return;
   const o=$('modal-overlay');$('modal-title').textContent=b.name;
   $('modal-body').innerHTML='<p style="color:var(--sub);font-size:13px">Open, rename or delete this book.</p>';
   const F=$('modal-footer');F.innerHTML='';
+  const clsModal=()=>{clearModalCloser();o.classList.remove('active')};
   const mk=(t,cls,fn)=>{const x=document.createElement('button');x.className=cls;x.textContent=t;
-    x.onclick=()=>{o.classList.remove('active');fn()};return x};
+    x.onclick=()=>{clsModal();fn()};return x};
   F.append(mk('Open','btn-cancel',()=>switchBook(id)),
     mk('Rename','btn-cancel',()=>promptDlg('Rename book',b.name,v=>{renameBook(id,v);renderBooks()})),
     mk('Delete','btn-danger',()=>deleteBook(id)));
-  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}}
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)clsModal()};
+  setModalCloser(clsModal)}
 /* ---------- entries ---------- */
-$('cancel-edit-btn').onclick=()=>{state.editId=null;$('cancel-edit-btn').style.display='none';$('save-tx-btn').textContent='Save Entry';navigate('home')};
+$('cancel-edit-btn').onclick=()=>{state.editId=null;updateAddBtns();$('save-tx-btn').textContent='Save Entry';navigate('home')};
+$('back-add-btn').onclick=()=>navigate('home');
+function updateAddBtns(){const ed=!!state.editId;
+  $('cancel-edit-btn').style.display=ed?'block':'none';
+  $('back-add-btn').style.display=ed?'none':'block'}
 $('save-tx-btn').onclick=saveTx;
 function txPath(){if(state.demo)return null;
   return firebase.database().ref('cashbook/'+uid()+'/books/'+state.current+'/transactions')}
@@ -301,14 +315,14 @@ function saveTx(){if(!state.current)return toast('Create a book first','error');
   if(state.editId)base.child(state.editId).set(tx).then(done).catch(e=>toast(e.message,'error'));
   else base.push(tx).then(done).catch(e=>toast(e.message,'error'))}
 function afterSave(){toast(state.editId?'Entry updated':'Entry saved','success');
-  state.editId=null;$('cancel-edit-btn').style.display='none';$('save-tx-btn').textContent='Save Entry';
-  $('f-amount').value='';$('f-note').value='';navigate('home');render()}
+  state.editId=null;updateAddBtns();$('save-tx-btn').textContent='Save Entry';
+  $('f-amount').value='';$('f-note').value='';navigate('home',false);render()}
 function editTx(id){const t=curTxs()[id];if(!t)return;state.editId=id;setType(t.type);
   $('f-amount').value=t.amount;$('f-note').value=t.note||'';$('f-method').value=t.method||'Cash';$('f-date').value=t.date;
   renderCats();[...$('cat-row').children].forEach(c=>c.classList.toggle('active',c.textContent===t.category));
   if(![...$('cat-row').children].some(c=>c.classList.contains('active'))&&$('cat-row').firstChild)
     $('cat-row').firstChild.classList.add('active');
-  $('save-tx-btn').textContent='Update Entry';$('cancel-edit-btn').style.display='block';navigate('add')}
+  $('save-tx-btn').textContent='Update Entry';updateAddBtns();navigate('add')}
 function delTx(id){confirmDlg('Delete entry?','<p>Remove this transaction permanently?</p>',()=>{
   if(state.demo){delete curBook().transactions[id];persistDemo();render();return}
   txPath().child(id).remove().then(()=>toast('Deleted','success'))})}
@@ -348,8 +362,9 @@ function openSheet(title,body,foot){const o=$('modal-overlay');o.classList.add('
   $('modal-body').innerHTML='<div class="sheet-head"><button class="sheet-x" id="sheet-x"><span class="material-icons-round">close</span></button><h3>'+title+'</h3></div>'+
     '<div class="sheet-body">'+body+'</div><div class="sheet-foot">'+foot+'</div>';
   $('sheet-x').onclick=closeSheet;
-  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)closeSheet()}}
-function closeSheet(){const o=$('modal-overlay');o.classList.remove('active');o.classList.remove('sheet')}
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)closeSheet()};
+  setModalCloser(closeSheet)}
+function closeSheet(){clearModalCloser();const o=$('modal-overlay');o.classList.remove('active');o.classList.remove('sheet')}
 function radioRows(name,opts,sel,multi){return opts.map(([v,l])=>
   '<label class="fk-radio'+(multi?(sel.includes(v)?' sel':''):(sel===v?' sel':''))+'"><input type="'+(multi?'checkbox':'radio')+'" name="'+name+'" value="'+v+'"'+(multi?(sel.includes(v)?' checked':''):(sel===v?' checked':''))+'><span class="'+(multi?'fk-check':'fk-dot')+'"></span>'+esc(l)+'</label>').join('')}
 function markReady(){const b=$('sheet-apply');if(b)b.classList.add('ready')}
@@ -448,7 +463,7 @@ function render(){if(!state.user)return;const b=curBook();
 function txMenu(id){const o=$('modal-overlay');const t=curTxs()[id]||{};
   const me=(state.user.displayName||(state.user.email||'You').split('@')[0]);
   const when=(t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{day:'numeric',month:'short',year:'numeric'}):'')+(t.createdAt?', '+timeFmt(t.createdAt).replace(/^at /,''):'');
-  $('modal-title').textContent='Entry Details';
+  $('modal-title').innerHTML='Entry Details<button class="modal-x" id="detail-x"><span class="material-icons-round">close</span></button>';
   $('modal-body').innerHTML='<div class="apk-detail'+(t.type==='out'?' out':'')+'">'+
     '<div class="apk-detail-top"><span>'+(t.type==='in'?'Cash In':'Cash Out')+'</span><span>'+esc(when)+'</span></div>'+
     '<h2 class="'+t.type+'">'+fmtMoney(t.amount)+'</h2>'+
@@ -460,13 +475,16 @@ function txMenu(id){const o=$('modal-overlay');const t=curTxs()[id]||{};
     ((t.history&&t.history.length)?'<p class="apk-created">Last Edited By<span>'+esc(t.history[t.history.length-1].by)+'</span></p>'+
     '<button class="apk-editbtn" id="detail-hist"><span class="material-icons-round">history</span> View edit history</button>':'');
   const F=$('modal-footer');F.innerHTML='';
+  const clsModal=()=>{clearModalCloser();o.classList.remove('active')};
   const mk=(t2,cls,fn)=>{const x=document.createElement('button');x.className=cls;x.innerHTML=t2;
-    x.onclick=()=>{o.classList.remove('active');fn()};return x};
+    x.onclick=()=>{clsModal();fn()};return x};
   F.append(mk('<span class="material-icons-round" style="font-size:18px;vertical-align:-4px">share</span> Share entry','apk-share',()=>shareTx(id)),
     mk('Delete','btn-danger',()=>delTx(id)));
-  $('detail-edit').onclick=()=>{o.classList.remove('active');editTx(id)};
-  const hb=$('detail-hist');if(hb)hb.onclick=()=>{o.classList.remove('active');openHistory(id)};
-  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}}
+  $('detail-edit').onclick=()=>{clsModal();editTx(id)};
+  $('detail-x').onclick=clsModal;
+  const hb=$('detail-hist');if(hb)hb.onclick=()=>{clsModal();openHistory(id)};
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)clsModal()};
+  setModalCloser(clsModal)}
 function fmtDT(ts){const d=new Date(+ts);if(isNaN(d))return'';
   return d.toLocaleDateString('en-US',{day:'numeric',month:'short',year:'numeric'})+', '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})}
 function openHistory(id){const t=curTxs()[id]||{};const hist=pruneHist(t.history||[]).slice().reverse();
@@ -487,7 +505,8 @@ function openHistory(id){const t=curTxs()[id]||{};const hist=pruneHist(t.history
     '<div class="sheet-foot"></div>';
   $('modal-footer').innerHTML='';
   $('sheet-x').onclick=closeSheet;
-  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)closeSheet()}}
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)closeSheet()};
+  setModalCloser(closeSheet)}
 function ordinal(n){const s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])}
 function billDate(ds){const d=new Date((ds||todayISO())+'T12:00:00');
   return ordinal(d.getDate())+' '+d.toLocaleDateString('en-US',{month:'short'})+' '+d.getFullYear()}
@@ -892,9 +911,10 @@ $('btn-export').onclick=exportCSV;$('btn-export2').onclick=exportCSV;
 /* ---------- nav ---------- */
 document.querySelectorAll('.bottom-nav-item').forEach(x=>x.onclick=()=>navigate(x.dataset.page));
 function newEntry(type){state.editId=null;setType(type||'out');$('save-tx-btn').textContent='Save Entry';
-  $('cancel-edit-btn').style.display='none';$('f-amount').value='';$('f-note').value='';navigate('add')}
+  updateAddBtns();$('f-amount').value='';$('f-note').value='';navigate('add')}
 $('go-add-in').onclick=()=>newEntry('in');
 $('go-add-out').onclick=()=>newEntry('out');
 $('dlg').addEventListener('click',e=>{if(e.target.id==='dlg')closeDlg()});
+try{history.replaceState({root:true},'')}catch(e){}
 setType('out');
 })();

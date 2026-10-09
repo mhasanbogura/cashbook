@@ -162,6 +162,7 @@ body{font-family:'Times New Roman',serif;background:var(--bg);color:var(--text);
 /* bottom nav — same as mess manager */
 .bottom-nav{position:fixed;bottom:var(--sab);left:0;right:0;background:rgba(18,18,32,.85);border-top:1px solid var(--border);z-index:100;display:flex;align-items:center;padding:6px 0;max-width:680px;margin:0 auto}
 .bottom-nav-items{display:flex;justify-content:space-around;flex:1}
+.bottom-nav-item{min-width:76px}
 .bottom-nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 6px;background:none;border:none;color:#888;font-size:10px;cursor:pointer;font-family:inherit;min-width:52px;transition:color .2s}
 .bottom-nav-item .material-icons-round{font-size:22px}
 .bottom-nav-item:hover{color:#aaa}
@@ -186,6 +187,8 @@ body{font-family:'Times New Roman',serif;background:var(--bg);color:var(--text);
 .modal-overlay.active{display:flex}
 .modal{background:var(--card);border-radius:14px;width:100%;max-width:400px;padding:22px;border:1px solid var(--border)}
 .modal h3{margin-bottom:12px;font-size:17px}
+.modal-x{position:absolute;top:12px;right:12px;background:var(--bg);border:1px solid var(--border);border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--sub);font-family:inherit}
+.modal{position:relative}
 .modal-actions{display:flex;gap:10px;margin-top:18px}
 .modal-actions button{flex:1;padding:12px;border-radius:10px;border:none;font-weight:700;cursor:pointer;font-family:inherit;font-size:14px}
 .btn-cancel{background:var(--bg);color:var(--text);border:1px solid var(--border)!important}
