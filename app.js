@@ -396,13 +396,89 @@ function tableFromText(text){
     if(parts.length<head.length-1)continue;
     const o={};head.forEach((h,j)=>o[h]=parts[j]!==undefined?parts[j]:'');out.push(o)}
   return normalizeKeys(out)}
+/* ----- statement-PDF tables: rebuild grid from text coordinates ----- */
+function bandItems(items,tol){
+  const sorted=[...items].sort((a,b)=>b.y-a.y);const bands=[];let cur=null;
+  sorted.forEach(it=>{if(!cur||Math.abs(it.y-cur.y)>tol){cur={y:it.y,items:[]};bands.push(cur)}cur.items.push(it)});
+  bands.forEach(b=>b.items.sort((a,c)=>a.x-c.x));return bands}
+function buildPdfRows(pages,fileName){
+  const MONTHS={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  const norm=s=>(''+s).replace(/\s+/g,' ').trim();
+  const isHeaderTxt=t=>{const l=t.toLowerCase();let h=0;
+    if(l.includes('date'))h++;if(l.includes('notes'))h++;
+    if(l.includes('description')||l.includes('category'))h++;if(l.includes('cash'))h++;if(l.includes('balance'))h++;return h>=4};
+  // 1) locate header band + column x-centres
+  let HC=null;
+  for(const items of pages){if(HC)break;
+    bandItems(items,3).forEach(b=>{if(HC)return;
+      const txt=norm(b.items.map(i=>i.s).join(' '));if(!isHeaderTxt(txt))return;
+      const at=kw=>{const f=b.items.find(i=>i.s.toLowerCase().includes(kw));return f?f.x:null};
+      let dateX=at('date'),notesX=at('notes');
+      let descX=at('description');if(descX===null)descX=at('category');
+      const cash=b.items.filter(i=>i.s.toLowerCase().includes('cash')).sort((a,c)=>a.x-c.x);
+      let inX=null,outX=null;
+      cash.forEach(i=>{const l=i.s.toLowerCase();
+        if(l.includes('in')&&inX===null)inX=i.x;else if(l.includes('out')&&outX===null)outX=i.x});
+      if(cash.length>=2&&inX!==null&&outX!==null){/* classified */}
+      else if(cash.length>=2){inX=cash[0].x;outX=cash[cash.length-1].x}
+      const balX=at('balance');
+      if(dateX===null||notesX===null||balX===null)return;
+      const gaps=[notesX-dateX,descX!==null?descX-notesX:0].filter(g=>g>0);
+      const avg=gaps.length?gaps.reduce((a,c)=>a+c,0)/gaps.length:80;
+      HC={dateX,notesX,descX:descX===null?notesX+avg:descX,inX:outX!==null&&inX===null?null:inX,outX,balX,serialMax:dateX-avg/2,
+        order:[['date',dateX],['notes',notesX],['desc',descX===null?notesX+avg:descX]].sort((a,c)=>a[1]-c[1])};
+      if(HC.inX===null&&HC.outX!==null)HC.inX=HC.outX-avg;
+      if(HC.outX===null&&HC.inX!==null)HC.outX=HC.inX+avg})}
+  if(!HC)return[];
+  const colOf=x=>{if(x<HC.serialMax+2)return 0;
+    const c=[HC.dateX,HC.notesX,HC.descX,HC.inX,HC.outX,HC.balX];
+    let bi=0,bd=1e12;c.forEach((cx,i)=>{const d=Math.abs(x-cx);if(d<bd){bd=d;bi=i}});
+    return bi+1};
+  // 2) book title: first "NN. name" line before header on page 1
+  let book='';
+  bandItems(pages[0]||[],3).forEach(b=>{const t=norm(b.items.map(i=>i.s).join(' '));
+    if(isHeaderTxt(t)||book)return;const m=t.match(/^(\d{1,2})\.\s*(.+)$/);if(m)book=(m[1]+'. '+m[2]).slice(0,60)});
+  if(!book){const base=fileName.replace(/\.(pdf|PDF)$/,'').replace(/(\d{2}-[A-Za-z]{3}-\d{4}).*$/,'$1').trim();
+    book=(base||'Imported').slice(0,60)}
+  // 3) walk bands → records anchored by serial numbers
+  const recs=[];let cur=null,headerSeen=false;
+  const pushBand=(b,firstPage)=>{
+    const cells=[[],[],[],[],[],[],[]];
+    b.items.forEach(it=>cells[colOf(it.x)].push(it.s));
+    const txt=norm(cells.flat().join(' '));
+    if(isHeaderTxt(txt)){headerSeen=true;return}
+    if(/total\s*cash/i.test(txt))return;
+    const serial=norm(cells[0].join(' '));
+    if(/^\d{1,4}$/.test(serial)){cur={cells:cells.map(c=>[...c]),serial};recs.push(cur)}
+    else if(cur){cells.forEach((c,i)=>{if(c.length)cur.cells[i].push(...c)})}};
+  pages.forEach((items,pi)=>bandItems(items,3).forEach(b=>pushBand(b,pi===0)));
+  // 4) records → canonical rows
+  const parseAmt=s=>{const v=parseFloat((''+s).replace(/,/g,''));return isNaN(v)?0:v};
+  const out=[];
+  recs.forEach(r=>{
+    const j=i=>norm(r.cells[i].join(' '));
+    const dm=j(1).match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+    if(!dm)return;const mo=MONTHS[dm[2].toLowerCase().slice(0,3)];if(!mo)return;
+    const date=dm[3]+'-'+mo+'-'+('0'+dm[1]).slice(-2);
+    const ci=parseAmt(j(4)),co=parseAmt(j(5));
+    if(!(ci>0)&&!(co>0))return;
+    const type=ci>0?'in':'out';
+    const desc=j(3).replace(/\s*\n\s*/g,'\n');
+    out.push({id:'pdf-'+book.replace(/[^\w]+/g,'')+'-'+r.serial,date,
+      cash_in:ci,cash_out:co,notes:j(2),description:desc,accounts:book,
+      isDeleted:0,transactionType:type==='in'?1:2,balance:parseAmt(j(6))})});
+  return out}
 function readPdfFile(file){return file.arrayBuffer().then(buf=>loadPdfJs().then(async pdfjs=>{
   const pdf=await pdfjs.getDocument({data:new Uint8Array(buf)}).promise;
-  let text='';const n=Math.min(pdf.numPages,50);
+  const pages=[];const n=Math.min(pdf.numPages,80);
   for(let p=1;p<=n;p++){const pg=await pdf.getPage(p);
-    text+=(await pg.getTextContent()).items.map(it=>it.str).join(' ')+'\n'}
+    pages.push((await pg.getTextContent()).items
+      .map(it=>({x:it.transform[4],y:it.transform[5],s:it.str||''})).filter(o=>o.s.trim()))}
   try{pdf.destroy()}catch(e){}
-  const rows=tableFromText(text);
+  let rows=buildPdfRows(pages,file.name);
+  if(!rows.length){ // fall back to plain-text table scan
+    const text=pages.map(pg=>pg.map(o=>o.s).join(' ')).join('\n');
+    rows=tableFromText(text)}
   if(!rows.length)throw new Error('no transaction table found');return rows}))}
 function methodForAccount(name){const n=(name||'').toLowerCase();
   if(n.includes('bkash'))return'bKash';if(n.includes('nagad'))return'Nagad';
@@ -415,7 +491,8 @@ function mapApkRow(r){
   const type=+r.transactionType===1?'in':'out';
   const amt=type==='in'?parseFloat(r.cash_in):parseFloat(r.cash_out);
   if(!(amt>0))return null;
-  const date=dateFromMs(r.date);if(!date)return null;
+  const iso=/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')?r.date:null;
+  const date=iso||dateFromMs(r.date);if(!date)return null;
   const desc=(r.description||'').trim();
   return{type,amount:Math.round(amt*100)/100,
     category:(r.notes||'').trim()||(type==='in'?'Cash In':'Cash Out'),
@@ -423,7 +500,8 @@ function mapApkRow(r){
     details:desc.length>120?desc:'',
     method:methodForAccount(r.accounts),
     book:(r.accounts||'').trim()||'My Book',
-    date,createdAt:+r.date||Date.now(),importId:'csv-'+(r.id||(''+date+amt))}}
+    date,createdAt:iso?new Date(date+'T12:00:00').getTime():(+r.date||Date.now()),
+    importId:/^pdf-/.test(r.id||'')?r.id:'csv-'+(r.id||(''+date+amt))}}
 function collectImport(parsedFiles){
   // parsedFiles: [{name, rows:[objects]}] — returns plan
   const plan={books:{},skipped:0,files:0};
