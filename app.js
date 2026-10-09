@@ -339,10 +339,10 @@ function dateLabel(){const f=state.filters;
   return s}
 function paintChips(){$('dash-month').textContent=dateLabel();
   $('type-pick-label').textContent=FILTER_LABEL[state.filter]||'All Entries';
+  $('cat-pick-label').textContent=state.filters.cats.length?state.filters.cats.length+' selected':'Category';
   $('month-pick').classList.toggle('on',state.filters.date!=='all');
   $('type-pick').classList.toggle('on',state.filter!=='all');
-  const adv=state.filters.cats.length>0||state.filters.methods.length>0;
-  $('filters-btn').classList.toggle('on',adv)}
+  $('cat-pick').classList.toggle('on',state.filters.cats.length>0)}
 function openSheet(title,body,foot){const o=$('modal-overlay');o.classList.add('sheet');
   $('modal-title').textContent='';$('modal-footer').innerHTML='';
   $('modal-body').innerHTML='<div class="sheet-head"><button class="sheet-x" id="sheet-x"><span class="material-icons-round">close</span></button><h3>'+title+'</h3></div>'+
@@ -379,60 +379,29 @@ function openTypeSheet(){openSheet('Select Entry Type Filter',radioRows('ftype',
     if(sel)state.filter=sel.value;closeSheet();render()}}
 $('type-pick').onclick=openTypeSheet;
 $('month-pick').onclick=openDateSheet;
-$('filters-btn').onclick=()=>openFilters('date');
-/* ----- full Filters page ----- */
-const FK_TABS=[['date','Date'],['type','Entry Type'],['cats','Category'],['methods','Payment Mode']];
-let fkTab='date',fkDraft=null;
+$('sort-btn').onclick=()=>{state.sort=state.sort==='desc'?'asc':'desc';
+  toast(state.sort==='desc'?'Newest first':'Oldest first','info');render()};
+$('search-input').oninput=e=>{state.search=e.target.value.toLowerCase();render()};
+$('cat-pick').onclick=openCatSheet;
+function openCatSheet(){const ac=allCats();
+  const sel=new Set(state.filters.cats);
+  openSheet('Select Category',
+    '<div class="apk-search"><span class="material-icons-round">search</span><input id="fk-catq" placeholder="Search"></div><div id="fk-catlist"></div>',
+    '<button class="fk-clear" id="sheet-clear"><span class="material-icons-round">close</span> Clear</button><button class="fk-apply ready" id="sheet-apply">Apply</button>');
+  const draw=q=>{const f=(q||'').toLowerCase();
+    $('fk-catlist').innerHTML=['in','out'].map(t=>{
+      const list=ac[t].filter(n=>n.toLowerCase().includes(f));if(!list.length)return'';
+      return'<p class="fk-sub">'+(t==='in'?'Cash In':'Cash Out')+'</p>'+list.map(n=>
+      '<label class="fk-radio'+(sel.has(n)?' sel':'')+'"><input type="checkbox" data-v="'+esc(n)+'"'+(sel.has(n)?' checked':'')+'><span class="fk-check"></span>'+esc(n)+'</label>').join('')}).join('')||'<div class="empty">No categories</div>';
+    $('fk-catlist').querySelectorAll('input').forEach(x=>x.onchange=()=>{
+      x.checked?sel.add(x.dataset.v):sel.delete(x.dataset.v);
+      x.closest('.fk-radio').classList.toggle('sel',x.checked)})};
+  draw('');$('fk-catq').oninput=e=>draw(e.target.value);
+  $('sheet-clear').onclick=()=>{state.filters.cats=[];closeSheet();render()};
+  $('sheet-apply').onclick=()=>{state.filters.cats=[...sel];closeSheet();render()}}
 function allCats(){const b=curBook();if(!b)return{in:[],out:[]};
   const g=t=>{const c=b.categories&&b.categories[t];return c?Object.values(c):[]};
   return{in:g('in'),out:g('out')}}
-function openFilters(tab){fkTab=tab||'date';
-  fkDraft=JSON.parse(JSON.stringify(state.filters));
-  fkDraft.type=state.filter;
-  renderFkTabs();renderFkContent();navigate('filters')}
-function renderFkTabs(){$('fk-tabs').innerHTML='';
-  FK_TABS.forEach(([k,l])=>{const b=document.createElement('button');
-    b.className='fk-tab'+(fkTab===k?' sel':'');b.textContent=l;
-    b.onclick=()=>{fkTab=k;renderFkTabs();renderFkContent()};$('fk-tabs').appendChild(b)})}
-function fkRadio(name,opts,sel){return opts.map(([v,l])=>
-  '<label class="fk-radio'+(sel===v?' sel':'')+'"><input type="radio" name="'+name+'" value="'+v+'"'+(sel===v?' checked':'')+'><span class="fk-dot"></span>'+esc(l)+'</label>').join('')}
-function fkChecks(opts,sel){return opts.map(v=>
-  '<label class="fk-radio'+(sel.includes(v)?' sel':'')+'"><input type="checkbox" data-v="'+esc(v)+'"'+(sel.includes(v)?' checked':'')+'><span class="fk-check"></span>'+esc(v)+'</label>').join('')}
-function renderFkContent(){const c=$('fk-content');const d=fkDraft;
-  if(fkTab==='date'){c.innerHTML=fkRadio('fkd',DATE_OPTS,d.date)+
-    '<div id="fk-single" style="display:'+(d.date==='single'?'block':'none')+'"><div class="fk-date-inputs"><input type="date" id="fk-s" value="'+d.single+'"></div></div>'+
-    '<div id="fk-range" style="display:'+(d.date==='range'?'block':'none')+'"><div class="fk-date-inputs"><input type="date" id="fk-fr" value="'+d.from+'"><input type="date" id="fk-to" value="'+d.to+'"></div></div>';
-    c.querySelectorAll('input[name=fkd]').forEach(r=>r.onchange=()=>{d.date=r.value;
-      c.querySelectorAll('.fk-radio').forEach(x=>x.classList.toggle('sel',x.querySelector('input').checked));
-      $('fk-single').style.display=d.date==='single'?'block':'none';
-      $('fk-range').style.display=d.date==='range'?'block':'none'})}
-  if(fkTab==='type'){c.innerHTML=fkRadio('fkt',TYPE_OPTS,d.type);
-    c.querySelectorAll('input[name=fkt]').forEach(r=>r.onchange=()=>{d.type=r.value;
-      c.querySelectorAll('.fk-radio').forEach(x=>x.classList.toggle('sel',x.querySelector('input').checked))})}
-  if(fkTab==='cats'){const ac=allCats();
-    c.innerHTML='<div class="apk-search"><span class="material-icons-round">search</span><input id="fk-catq" placeholder="Search"></div><div id="fk-catlist"></div>';
-    const draw=q=>{const f=(q||'').toLowerCase();
-      $('fk-catlist').innerHTML=['in','out'].map(t=>{
-        const list=ac[t].filter(n=>n.toLowerCase().includes(f));if(!list.length)return'';
-        return'<p class="fk-sub">'+(t==='in'?'Cash In':'Cash Out')+'</p>'+list.map(n=>
-        '<label class="fk-radio'+(d.cats.includes(n)?' sel':'')+'"><input type="checkbox" data-v="'+esc(n)+'"'+(d.cats.includes(n)?' checked':'')+'><span class="fk-check"></span>'+esc(n)+'</label>').join('')}).join('')||'<div class="empty">No categories</div>';
-      c.querySelectorAll('#fk-catlist input').forEach(x=>x.onchange=()=>{
-        const v=x.dataset.v;d.cats=x.checked?[...new Set([...d.cats,v])]:d.cats.filter(y=>y!==v);
-        x.closest('.fk-radio').classList.toggle('sel',x.checked)})};
-    draw('');$('fk-catq').oninput=e=>draw(e.target.value)}
-  if(fkTab==='methods'){c.innerHTML='<p class="fk-sub">Entries with</p>'+METHODS.map(m=>
-    '<label class="fk-radio'+(d.methods.includes(m)?' sel':'')+'"><input type="checkbox" data-v="'+m+'"'+(d.methods.includes(m)?' checked':'')+'><span class="fk-check"></span>'+esc(m)+'</label>').join('');
-    c.querySelectorAll('input').forEach(x=>x.onchange=()=>{const v=x.dataset.v;
-      d.methods=x.checked?[...new Set([...d.methods,v])]:d.methods.filter(y=>y!==v);
-      x.closest('.fk-radio').classList.toggle('sel',x.checked)})}}
-$('filters-back').onclick=()=>navigate('home');
-$('fk-clear').onclick=()=>{fkDraft=defFilters();state.filter='all';renderFkTabs();renderFkContent();toast('Filters cleared','info')};
-$('fk-apply').onclick=()=>{const d=fkDraft;
-  const s=$('fk-s'),fr=$('fk-fr'),to=$('fk-to');
-  if(s)d.single=s.value||todayISO();if(fr)d.from=fr.value;if(to)d.to=to.value;
-  state.filters={date:d.date,single:d.single,from:d.from,to:d.to,type:d.type,cats:[...d.cats],methods:[...d.methods]};
-  state.filter=d.type||'all';
-  navigate('home');render();toast('Filters applied','success')};
 function scopedTxs(){return Object.entries(curTxs()).filter(([,t])=>matchDate(t.date||''))}
 $('btn-refresh').onclick=()=>render();
 $('go-reports').onclick=()=>navigate('reports');

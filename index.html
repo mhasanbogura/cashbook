@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="icon.png?v=3">
 <link rel="apple-touch-icon" href="icon.png?v=3">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=2.2">
+<link rel="stylesheet" href="style.css?v=2.3">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com">
 <link rel="preconnect" href="https://securetoken.googleapis.com">
@@ -114,7 +114,7 @@
         <button class="apk-chipbtn" id="sort-btn" title="Sort order"><span class="material-icons-round">sort</span></button>
         <button class="apk-chipbtn wide" id="month-pick"><span class="material-icons-round">calendar_month</span><span id="dash-month">All Time</span><span class="material-icons-round">expand_more</span></button>
         <button class="apk-chipbtn wide" id="type-pick"><span id="type-pick-label">All Entries</span><span class="material-icons-round">expand_more</span></button>
-        <button class="apk-chipbtn" id="filters-btn" title="All filters"><span class="material-icons-round">tune</span></button>
+        <button class="apk-chipbtn wide" id="cat-pick"><span id="cat-pick-label">Category</span><span class="material-icons-round">expand_more</span></button>
       </div>
       <div class="apk-summary">
         <div class="apk-sumrow"><span>Net Balance</span><strong id="dash-balance">0</strong></div>
@@ -151,19 +151,6 @@
       <div class="apk-search"><span class="material-icons-round">search</span><input id="book-search" placeholder="Search books"></div>
       <div id="book-list"></div>
       <button class="apk-addbook" id="create-book-btn"><span class="material-icons-round">add</span> Add new book</button>
-    </div>
-
-    <!-- FILTERS -->
-    <div class="page" id="page-filters">
-      <div class="fk-head"><button class="topbar-btn" id="filters-back"><span class="material-icons-round">arrow_back</span></button><h2>Filters</h2></div>
-      <div class="fk-body">
-        <div class="fk-tabs" id="fk-tabs"></div>
-        <div class="fk-content" id="fk-content"></div>
-      </div>
-      <div class="fk-foot">
-        <button class="fk-clear" id="fk-clear"><span class="material-icons-round">close</span> Clear all</button>
-        <button class="fk-apply" id="fk-apply">Apply</button>
-      </div>
     </div>
 
     <!-- REPORTS -->
@@ -236,6 +223,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=2.2"></script>
+<script src="app.js?v=2.3"></script>
 </body>
 </html>
