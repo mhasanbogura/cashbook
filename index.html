@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="app-icon.png">
 <link rel="apple-touch-icon" href="app-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=1.2">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com">
 <link rel="preconnect" href="https://securetoken.googleapis.com">
@@ -139,7 +139,7 @@
           <button id="type-in" class="type-btn in active"><span class="material-icons-round">add</span> Cash In</button>
           <button id="type-out" class="type-btn out"><span class="material-icons-round">remove</span> Cash Out</button>
         </div>
-        <div class="amount-wrap"><span>৳</span><input id="f-amount" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></div>
+        <div class="amount-wrap"><span id="cur-symbol">৳</span><input id="f-amount" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></div>
         <div class="form-group"><label style="display:flex;align-items:center;justify-content:space-between">Category <button class="btn-link-blue" id="manage-cats-btn" type="button">Manage</button></label><div class="chip-row" id="cat-row"></div></div>
         <div class="form-row">
           <div class="form-group"><label>Date</label><input id="f-date" type="date"></div>
@@ -173,9 +173,15 @@
       <div class="profile-card"><div class="avatar-big" id="prof-avatar">C</div><div><h3 id="prof-name">User</h3><p id="prof-email">-</p></div></div>
       <div class="settings-card">
         <div class="settings-title">GENERAL</div>
-        <label class="settings-row"><span class="material-icons-round">dark_mode</span> Dark Theme <span class="switch"><input type="checkbox" id="set-dark" checked><span class="slider"></span></span></label>
+        <label class="settings-row"><span class="material-icons-round">phone_android</span> Device Theme <span class="switch"><input type="checkbox" id="set-device" checked><span class="slider"></span></span></label>
         <label class="settings-row"><span class="material-icons-round">contrast</span> OLED Black <span class="switch"><input type="checkbox" id="set-oled" checked><span class="slider"></span></span></label>
-        <div class="settings-row"><span class="material-icons-round">payments</span> Currency <strong style="margin-left:auto">৳ BDT</strong></div>
+        <div class="settings-row"><span class="material-icons-round">payments</span> Currency
+          <div class="lang-toggle" id="cur-toggle" data-cur="bdt" style="margin-left:auto">
+            <div class="lt-slider"></div>
+            <span class="lt-label" data-cur="bdt">৳ BDT</span>
+            <span class="lt-label" data-cur="usd">$ USD</span>
+          </div>
+        </div>
       </div>
       <div class="settings-card">
         <div class="settings-title">BOOKS & CATEGORIES</div>
@@ -216,6 +222,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=1.2"></script>
 </body>
 </html>

@@ -12,7 +12,6 @@ function fmtDate(ds){const t=new Date();t.setHours(0,0,0,0);const x=new Date(ds+
   const diff=Math.round((t-x)/86400000);
   if(diff===0)return'Today';if(diff===1)return'Yesterday';
   return new Date(ds+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
-const fmtTaka=n=>'৳ '+Number(n||0).toLocaleString('en-US');
 const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>state.user&&state.user.uid;
 const curBook=()=>state.books[state.current]||null;
@@ -41,13 +40,30 @@ function promptDlg(title,initial,onOk,okLabel){$('dlgTitle').textContent=title;
   const ok=document.createElement('button');ok.className='btn danger';ok.style.background='linear-gradient(135deg,#3b7bdd,#0b3d91)';
   ok.textContent=okLabel||'Save';ok.onclick=()=>{const v=$('dlg-input').value.trim();if(!v)return toast('Enter a name','error');closeDlg();onOk(v)};
   A.append(no,ok);$('dlg').hidden=false;setTimeout(()=>{const i=$('dlg-input');if(i){i.focus();i.select()}},50)}
-/* ---------- theme ---------- */
-function applyTheme(){const dark=$('set-dark').checked;$('set-oled').disabled=!dark;
-  document.documentElement.dataset.theme=!dark?'light':(($('set-oled').checked)?'oled':'dark');
-  try{localStorage.setItem('cb-theme',JSON.stringify({dark,oed:$('set-oled').checked}))}catch(e){}}
+/* ---------- theme (same as mess manager: Device + OLED) ---------- */
+const sysDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(){const device=$('set-device').checked;const oled=$('set-oled').checked;
+  const dark=device?(sysDark?sysDark.matches:true):false;
+  $('set-oled').disabled=!dark;
+  document.documentElement.dataset.theme=!dark?'light':(oled?'oled':'dark');
+  try{localStorage.setItem('cb-theme',JSON.stringify({device,oled}))}catch(e){}}
 (function initTheme(){try{const t=JSON.parse(localStorage.getItem('cb-theme')||'null');
-  if(t){$('set-dark').checked=t.dark!==false;$('set-oled').checked=(t.oed!==false&&t.oled!==false)}}catch(e){}
-  applyTheme();$('set-dark').onchange=applyTheme;$('set-oled').onchange=applyTheme})();
+  if(t){$('set-device').checked=t.device!==false;$('set-oled').checked=t.oled!==false}}catch(e){}
+  applyTheme();$('set-device').onchange=applyTheme;$('set-oled').onchange=applyTheme;
+  if(sysDark&&sysDark.addEventListener)sysDark.addEventListener('change',()=>{if($('set-device').checked)applyTheme()})})();
+/* ---------- currency (BDT / USD, synced per user) ---------- */
+function curSym(){return state.currency==='usd'?'$':'৳'}
+function fmtMoney(n){return curSym()+' '+Number(n||0).toLocaleString('en-US')}
+function paintCurrency(){const c=state.currency||'bdt';const t=$('cur-toggle');if(!t)return;
+  t.dataset.cur=c;t.querySelectorAll('.lt-label').forEach(l=>l.classList.toggle('active',l.dataset.cur===c));
+  $('cur-symbol').textContent=curSym()}
+function setCurrency(c){if(c!=='bdt'&&c!=='usd')return;state.currency=c;paintCurrency();render();
+  try{localStorage.setItem('cb-cur',c)}catch(e){}
+  if(!state.demo&&firebaseReady()&&uid())firebase.database().ref('cashbook/'+uid()+'/settings/currency').set(c)}
+document.querySelectorAll('#cur-toggle .lt-label').forEach(l=>l.onclick=e=>{e.stopPropagation();setCurrency(l.dataset.cur)});
+$('cur-toggle').onclick=()=>setCurrency(state.currency==='bdt'?'usd':'bdt');
+try{const c=localStorage.getItem('cb-cur');if(c)state.currency=c}catch(e){}
+state.currency=state.currency||'bdt';paintCurrency();
 /* ---------- auth ---------- */
 $('show-login-btn').onclick=()=>showScreen('auth-login-screen');
 $('show-register-welcome').onclick=()=>showScreen('auth-register-screen');
@@ -122,6 +138,8 @@ function subscribe(){const ref=firebase.database().ref('cashbook/'+uid());
     }
     state.books=books;
     state.current=val.currentBook||Object.keys(books)[0]||null;
+    if(val.settings&&val.settings.currency)state.currency=val.settings.currency;
+    paintCurrency();
     if(!Object.keys(books).length){createBook('My Book',true);return}
     if(!state.current||!books[state.current]){state.current=Object.keys(books)[0]}
     // ensure categories exist
@@ -224,7 +242,7 @@ function renderBooks(){const box=$('book-list');if(!box)return;box.innerHTML='';
     const n=Object.keys(b.transactions||{}).length;
     const row=document.createElement('div');row.className='book-row'+(id===state.current?' active':'');
     row.innerHTML='<span class="material-icons-round" style="color:var(--primary2)">book</span>'+
-      '<strong>'+esc(b.name)+'</strong><small>'+n+' entries • '+fmtTaka(bal.net)+'</small>';
+      '<strong>'+esc(b.name)+'</strong><small>'+n+' entries • '+fmtMoney(bal.net)+'</small>';
     const open=document.createElement('button');open.className='icon-mini';open.title='Open';
     open.innerHTML='<span class="material-icons-round">open_in_new</span>';open.onclick=()=>switchBook(id);
     const ed=document.createElement('button');ed.className='icon-mini';ed.title='Rename';
@@ -271,8 +289,8 @@ function render(){if(!state.user)return;const b=curBook();
   $('dash-month').textContent=fmtMonth(state.monthKey);$('page-sub').textContent=fmtMonth(state.monthKey)+(b?' • '+b.name:'');
   const mtx=monthTxs();let tin=0,tout=0;
   mtx.forEach(([,t])=>{t.type==='in'?tin+=+t.amount||0:tout+=+t.amount||0});
-  $('dash-in').textContent=fmtTaka(tin);$('dash-out').textContent=fmtTaka(tout);
-  $('dash-balance').textContent=fmtTaka(tin-tout);
+  $('dash-in').textContent=fmtMoney(tin);$('dash-out').textContent=fmtMoney(tout);
+  $('dash-balance').textContent=fmtMoney(tin-tout);
   let rows=mtx.filter(([,t])=>state.filter==='all'||t.type===state.filter);
   if(state.search)rows=rows.filter(([,t])=>((t.note||'')+' '+(t.category||'')).toLowerCase().includes(state.search));
   rows.sort((a,c)=>(c[1].date||'').localeCompare(a[1].date||'')||((c[1].createdAt||0)-(a[1].createdAt||0)));
@@ -283,12 +301,12 @@ function render(){if(!state.user)return;const b=curBook();
       const g=document.createElement('div');g.className='day-group';
       const day=rows.filter(([,x])=>x.date===lastDay);let dIn=0,dOut=0;
       day.forEach(([,x])=>x.type==='in'?dIn+=+x.amount:dOut+=+x.amount);
-      g.innerHTML='<div class="day-head"><span>'+fmtDate(lastDay)+'</span><span>In '+fmtTaka(dIn)+' • Out '+fmtTaka(dOut)+'</span></div>';
+      g.innerHTML='<div class="day-head"><span>'+fmtDate(lastDay)+'</span><span>In '+fmtMoney(dIn)+' • Out '+fmtMoney(dOut)+'</span></div>';
       g.id='g-'+lastDay;box.appendChild(g)}
     const el=document.createElement('div');el.className='tx';
     el.innerHTML='<div class="tx-ic '+t.type+'"><span class="material-icons-round">'+(t.type==='in'?'arrow_downward':'arrow_upward')+'</span></div>'+
       '<div class="tx-mid"><strong>'+esc(t.category||(t.type==='in'?'Cash In':'Cash Out'))+'</strong><small>'+esc(t.note||t.method||'')+' • '+esc(t.method||'')+'</small></div>'+
-      '<div class="tx-amt '+t.type+'">'+(t.type==='in'?'+':'−')+' '+fmtTaka(t.amount)+'</div>';
+      '<div class="tx-amt '+t.type+'">'+(t.type==='in'?'+':'−')+' '+fmtMoney(t.amount)+'</div>';
     const menu=document.createElement('button');menu.className='tx-menu';
     menu.innerHTML='<span class="material-icons-round">more_vert</span>';menu.onclick=()=>txMenu(id);el.appendChild(menu);
     ($('g-'+CSS.escape(lastDay))||box).appendChild(el)});
@@ -301,15 +319,15 @@ function txMenu(id){const o=$('modal-overlay');$('modal-title').textContent='Ent
   const c=document.createElement('button');c.className='btn-cancel';c.textContent='Close';c.onclick=()=>o.classList.remove('active');
   F.append(e,d,c);o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}}
 function renderReports(mtx,tin,tout){
-  $('report-month').innerHTML='<div class="rrow"><span>Cash In</span><strong style="color:var(--green)">'+fmtTaka(tin)+'</strong></div>'+
-    '<div class="rrow"><span>Cash Out</span><strong style="color:var(--danger)">'+fmtTaka(tout)+'</strong></div>'+
-    '<div class="rrow"><span>Net</span><strong>'+fmtTaka(tin-tout)+'</strong></div>'+
+  $('report-month').innerHTML='<div class="rrow"><span>Cash In</span><strong style="color:var(--green)">'+fmtMoney(tin)+'</strong></div>'+
+    '<div class="rrow"><span>Cash Out</span><strong style="color:var(--danger)">'+fmtMoney(tout)+'</strong></div>'+
+    '<div class="rrow"><span>Net</span><strong>'+fmtMoney(tin-tout)+'</strong></div>'+
     '<div class="rrow"><span>Entries</span><strong>'+mtx.length+'</strong></div>';
   const byCat={};mtx.forEach(([,t])=>{const k=(t.type==='out'?'− ':'+ ')+(t.category||'Other');byCat[k]=(byCat[k]||0)+(+t.amount||0)});
   const top=Object.entries(byCat).sort((a,c)=>c[1]-a[1]).slice(0,6);const max=top.length?top[0][1]:1;
   $('report-cats').innerHTML=top.length?top.map(([k,v])=>'<div class="bar-row"><span class="bar-name">'+esc(k)+'</span>'+
     '<div class="bar-track"><div class="bar-fill'+(k[0]==='−'?' out':'')+'" style="width:'+Math.round(v/max*100)+'%"></div></div>'+
-    '<span class="bar-amt">'+fmtTaka(v)+'</span></div>').join(''):'<div class="empty">No data</div>';
+    '<span class="bar-amt">'+fmtMoney(v)+'</span></div>').join(''):'<div class="empty">No data</div>';
   const hist=[];const[y,m]=state.monthKey.split('-').map(Number);
   for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1);const k=monthKey(d);let hi=0,ho=0;
     Object.values(curTxs()).forEach(t=>{if((t.date||'').slice(0,7)===k){t.type==='in'?hi+=+t.amount||0:ho+=+t.amount||0}});
@@ -317,7 +335,7 @@ function renderReports(mtx,tin,tout){
   const mx=Math.max(1,...hist.map(h=>Math.abs(h.net)));
   $('report-history').innerHTML=hist.map(h=>'<div class="bar-row"><span class="bar-name">'+h.label+'</span>'+
     '<div class="bar-track"><div class="bar-fill'+(h.net<0?' out':'')+'" style="width:'+Math.round(Math.abs(h.net)/mx*100)+'%"></div></div>'+
-    '<span class="bar-amt">'+fmtTaka(h.net)+'</span></div>').join('')}
+    '<span class="bar-amt">'+fmtMoney(h.net)+'</span></div>').join('')}
 /* ---------- export ---------- */
 function exportCSV(){const b=curBook();const rows=[['book','date','type','category','note','method','amount']];
   Object.values(curTxs()).sort((a,c)=>(a.date||'').localeCompare(c.date||'')).forEach(t=>
