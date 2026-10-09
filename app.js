@@ -2,8 +2,8 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const DEFAULT_CATS={in:['Sales','Service','Salary','Gift','Loan In','Other Income'],
-  out:['Food','Transport','Shopping','Bills','Rent','Health','Education','Salary Paid','Loan Out','Other']};
+const DEFAULT_CATS={in:['Salary','Gift','Loan In','Other Income'],
+  out:['Food','Transport','Shopping','Bills','Rent','Health','Education','Loan Out','Other']};
 const state={user:null,demo:false,books:{},current:null,filter:'all',search:'',sort:'desc',bookSearch:'',
   monthKey:monthKey(new Date()),editId:null,entryType:'out'};
 function monthKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
