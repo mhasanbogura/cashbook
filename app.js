@@ -25,7 +25,7 @@ function navigate(page){document.querySelectorAll('.page').forEach(p=>p.classLis
   const el=$('page-'+page);if(el)el.classList.add('active');
   document.querySelectorAll('.bottom-nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   $('home-actions').classList.toggle('show',page==='home');
-  $('page-title').textContent={home:'Cashbook',books:'My Books',add:state.editId?'Edit Entry':'Add Entry',reports:'Reports',settings:'Settings'}[page]||'Cashbook';
+  $('page-title').textContent={home:'Cashbook',books:'My Books',filters:'Filters',add:state.editId?'Edit Entry':'Add Entry',reports:'Reports',settings:'Settings'}[page]||'Cashbook';
   if(page==='books')renderBooks();window.scrollTo(0,0)}
 function confirmDlg(title,bodyHTML,onYes,yesLabel){$('dlgTitle').textContent=title;$('dlgBody').innerHTML=bodyHTML;
   const A=$('dlgActions');A.innerHTML='';
@@ -275,10 +275,26 @@ $('cancel-edit-btn').onclick=()=>{state.editId=null;$('cancel-edit-btn').style.d
 $('save-tx-btn').onclick=saveTx;
 function txPath(){if(state.demo)return null;
   return firebase.database().ref('cashbook/'+uid()+'/books/'+state.current+'/transactions')}
+function userName(){return state.user.displayName||(state.user.email||'You').split('@')[0]}
+function pruneHist(h){const cut=Date.now()-30*864e5;return(h||[]).filter(x=>x.at>cut)}
+const HIST_LABEL={amount:'amount',type:'entry type',category:'category',note:'remark',method:'payment mode',date:'date'};
+function fmtVal(f,v){if(v===undefined||v===null||v==='')return'—';
+  if(f==='amount')return fmtMoney(v);
+  if(f==='type')return v==='in'?'Cash In':'Cash Out';
+  if(f==='date'&&/^\d{4}-\d{2}-\d{2}$/.test(v))return fmtDate(v);return''+v}
 function saveTx(){if(!state.current)return toast('Create a book first','error');
   const amt=parseFloat($('f-amount').value);if(!(amt>0))return toast('Enter a valid amount','error');
   const tx={type:state.entryType,amount:Math.round(amt*100)/100,category:selectedCat(),
     note:$('f-note').value.trim(),method:$('f-method').value,date:$('f-date').value||new Date().toISOString().slice(0,10),createdAt:Date.now()};
+  if(state.editId){const old=curTxs()[state.editId]||{};
+    tx.createdBy=old.createdBy||{name:userName(),at:old.createdAt||Date.now()};
+    const changes=[];
+    ['amount','type','category','note','method','date'].forEach(f=>{
+      const a=old[f]===undefined?'':old[f],b2=tx[f]===undefined?'':tx[f];
+      if(''+a!==''+b2)changes.push({f,from:''+a,to:''+b2})});
+    tx.history=pruneHist(old.history||[]);
+    if(changes.length)tx.history.push({by:userName(),at:Date.now(),changes})}else{
+    tx.createdBy={name:userName(),at:Date.now()};tx.history=[]}
   if(state.demo){const txs=curBook().transactions=curBook().transactions||{};
     if(state.editId)txs[state.editId]=tx;else txs['d'+Date.now()]=tx;persistDemo();afterSave();return}
   const base=txPath();const done=()=>afterSave();
@@ -299,19 +315,125 @@ function delTx(id){confirmDlg('Delete entry?','<p>Remove this transaction perman
 /* ---------- list (APK book-detail style) ---------- */
 const FILTER_LABEL={all:'All Entries',in:'Cash In only',out:'Cash Out only'};
 function paintTypeLabel(){$('type-pick-label').textContent=FILTER_LABEL[state.filter]||'All Entries'}
-$('type-pick').onclick=()=>{const o=$('modal-overlay');$('modal-title').textContent='Entry Type';
-  $('modal-body').innerHTML='<p style="color:var(--sub);font-size:13px">Show which entries?</p>';
-  const F=$('modal-footer');F.innerHTML='';
-  Object.keys(FILTER_LABEL).forEach(k=>{const b=document.createElement('button');
-    b.className='btn-cancel';b.textContent=FILTER_LABEL[k];
-    if(state.filter===k)b.style.borderColor='var(--primary2)';
-    b.onclick=()=>{state.filter=k;paintTypeLabel();o.classList.remove('active');render()};F.appendChild(b)});
-  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}};
-$('sort-btn').onclick=()=>{state.sort=state.sort==='desc'?'asc':'desc';
-  toast(state.sort==='desc'?'Newest first':'Oldest first','info');render()};
-$('search-input').oninput=e=>{state.search=e.target.value.toLowerCase();render()};
-$('month-pick').onclick=()=>{const m=$('month-hidden');m.value=state.monthKey;
-  m.onchange=()=>{if(m.value)state.monthKey=m.value;render()};if(m.showPicker)m.showPicker();else m.focus()};
+/* ---------- filters (APK style) ---------- */
+const METHODS=['Cash','bKash','Nagad','Rocket','Bank','Card'];
+const DATE_OPTS=[['all','All Time'],['today','Today'],['yesterday','Yesterday'],['thisMonth','This Month'],['lastMonth','Last Month'],['single','Single Day'],['range','Date Range']];
+const TYPE_OPTS=[['all','All'],['in','Cash In'],['out','Cash Out']];
+function todayISO(){return new Date().toISOString().slice(0,10)}
+function defFilters(){return{date:'all',single:todayISO(),from:'',to:'',type:'all',cats:[],methods:[]}}
+if(!state.filters)state.filters=defFilters();
+function monthKeyOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+function matchDate(ds){const f=state.filters;if(f.date==='all')return true;
+  const t=todayISO();
+  if(f.date==='today')return ds===t;
+  if(f.date==='yesterday')return ds===new Date(Date.now()-864e5).toISOString().slice(0,10);
+  if(f.date==='thisMonth')return(ds||'').slice(0,7)===monthKeyOf(new Date());
+  if(f.date==='lastMonth'){const d=new Date();d.setMonth(d.getMonth()-1);return(ds||'').slice(0,7)===monthKeyOf(d)}
+  if(f.date==='single')return ds===f.single;
+  if(f.date==='range'){if(f.from&&ds<f.from)return false;if(f.to&&ds>f.to)return false;return true}
+  return true}
+function dateLabel(){const f=state.filters;
+  const o=DATE_OPTS.find(o=>o[0]===f.date);let s=o?o[1]:'All Time';
+  if(f.date==='single'&&f.single)s=fmtDate(f.single);
+  if(f.date==='range'&&(f.from||f.to))s=(f.from||'…')+' → '+(f.to||'…');
+  return s}
+function paintChips(){$('dash-month').textContent=dateLabel();
+  $('type-pick-label').textContent=FILTER_LABEL[state.filter]||'All Entries';
+  $('month-pick').classList.toggle('on',state.filters.date!=='all');
+  $('type-pick').classList.toggle('on',state.filter!=='all');
+  const adv=state.filters.cats.length>0||state.filters.methods.length>0;
+  $('filters-btn').classList.toggle('on',adv)}
+function openSheet(title,body,foot){const o=$('modal-overlay');o.classList.add('sheet');
+  $('modal-title').textContent='';$('modal-footer').innerHTML='';
+  $('modal-body').innerHTML='<div class="sheet-head"><button class="sheet-x" id="sheet-x"><span class="material-icons-round">close</span></button><h3>'+title+'</h3></div>'+
+    '<div class="sheet-body">'+body+'</div><div class="sheet-foot">'+foot+'</div>';
+  $('sheet-x').onclick=closeSheet;
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)closeSheet()}}
+function closeSheet(){const o=$('modal-overlay');o.classList.remove('active');o.classList.remove('sheet')}
+function radioRows(name,opts,sel,multi){return opts.map(([v,l])=>
+  '<label class="fk-radio'+(multi?(sel.includes(v)?' sel':''):(sel===v?' sel':''))+'"><input type="'+(multi?'checkbox':'radio')+'" name="'+name+'" value="'+v+'"'+(multi?(sel.includes(v)?' checked':''):(sel===v?' checked':''))+'><span class="'+(multi?'fk-check':'fk-dot')+'"></span>'+esc(l)+'</label>').join('')}
+function markReady(){const b=$('sheet-apply');if(b)b.classList.add('ready')}
+function openDateSheet(){const f=state.filters;
+  openSheet('Select Date Filter',
+    radioRows('fdate',DATE_OPTS,f.date)+
+    '<div id="fk-single" style="display:'+(f.date==='single'?'block':'none')+'"><div class="fk-date-inputs"><input type="date" id="f-single" value="'+f.single+'"></div></div>'+
+    '<div id="fk-range" style="display:'+(f.date==='range'?'block':'none')+'"><div class="fk-date-inputs"><input type="date" id="f-from" value="'+f.from+'"><input type="date" id="f-to" value="'+f.to+'"></div></div>',
+    '<button class="fk-clear" id="sheet-clear"><span class="material-icons-round">close</span> Clear</button><button class="fk-apply" id="sheet-apply">Apply</button>');
+  document.querySelectorAll('input[name=fdate]').forEach(r=>r.onchange=()=>{markReady();
+    document.querySelectorAll('input[name=fdate]').forEach(x=>x.closest('.fk-radio').classList.toggle('sel',x.checked));
+    $('fk-single').style.display=r.value==='single'?'block':'none';
+    $('fk-range').style.display=r.value==='range'?'block':'none'});
+  $('sheet-clear').onclick=()=>{state.filters.date='all';state.filters.single=todayISO();state.filters.from='';state.filters.to='';
+    closeSheet();render()};
+  $('sheet-apply').onclick=()=>{const sel=document.querySelector('input[name=fdate]:checked');
+    if(sel)state.filters.date=sel.value;
+    const s=$('f-single'),fr=$('f-from'),to=$('f-to');
+    if(s)state.filters.single=s.value||todayISO();if(fr)state.filters.from=fr.value;if(to)state.filters.to=to.value;
+    closeSheet();render()}}
+function openTypeSheet(){openSheet('Select Entry Type Filter',radioRows('ftype',TYPE_OPTS,state.filter),
+  '<button class="fk-clear" id="sheet-clear"><span class="material-icons-round">close</span> Clear</button><button class="fk-apply ready" id="sheet-apply">Apply</button>');
+  document.querySelectorAll('input[name=ftype]').forEach(r=>r.onchange=()=>{
+    document.querySelectorAll('input[name=ftype]').forEach(x=>x.closest('.fk-radio').classList.toggle('sel',x.checked))});
+  $('sheet-clear').onclick=()=>{state.filter='all';closeSheet();render()};
+  $('sheet-apply').onclick=()=>{const sel=document.querySelector('input[name=ftype]:checked');
+    if(sel)state.filter=sel.value;closeSheet();render()}}
+$('type-pick').onclick=openTypeSheet;
+$('month-pick').onclick=openDateSheet;
+$('filters-btn').onclick=()=>openFilters('date');
+/* ----- full Filters page ----- */
+const FK_TABS=[['date','Date'],['type','Entry Type'],['cats','Category'],['methods','Payment Mode']];
+let fkTab='date',fkDraft=null;
+function allCats(){const b=curBook();if(!b)return{in:[],out:[]};
+  const g=t=>{const c=b.categories&&b.categories[t];return c?Object.values(c):[]};
+  return{in:g('in'),out:g('out')}}
+function openFilters(tab){fkTab=tab||'date';
+  fkDraft=JSON.parse(JSON.stringify(state.filters));
+  fkDraft.type=state.filter;
+  renderFkTabs();renderFkContent();navigate('filters')}
+function renderFkTabs(){$('fk-tabs').innerHTML='';
+  FK_TABS.forEach(([k,l])=>{const b=document.createElement('button');
+    b.className='fk-tab'+(fkTab===k?' sel':'');b.textContent=l;
+    b.onclick=()=>{fkTab=k;renderFkTabs();renderFkContent()};$('fk-tabs').appendChild(b)})}
+function fkRadio(name,opts,sel){return opts.map(([v,l])=>
+  '<label class="fk-radio'+(sel===v?' sel':'')+'"><input type="radio" name="'+name+'" value="'+v+'"'+(sel===v?' checked':'')+'><span class="fk-dot"></span>'+esc(l)+'</label>').join('')}
+function fkChecks(opts,sel){return opts.map(v=>
+  '<label class="fk-radio'+(sel.includes(v)?' sel':'')+'"><input type="checkbox" data-v="'+esc(v)+'"'+(sel.includes(v)?' checked':'')+'><span class="fk-check"></span>'+esc(v)+'</label>').join('')}
+function renderFkContent(){const c=$('fk-content');const d=fkDraft;
+  if(fkTab==='date'){c.innerHTML=fkRadio('fkd',DATE_OPTS,d.date)+
+    '<div id="fk-single" style="display:'+(d.date==='single'?'block':'none')+'"><div class="fk-date-inputs"><input type="date" id="fk-s" value="'+d.single+'"></div></div>'+
+    '<div id="fk-range" style="display:'+(d.date==='range'?'block':'none')+'"><div class="fk-date-inputs"><input type="date" id="fk-fr" value="'+d.from+'"><input type="date" id="fk-to" value="'+d.to+'"></div></div>';
+    c.querySelectorAll('input[name=fkd]').forEach(r=>r.onchange=()=>{d.date=r.value;
+      c.querySelectorAll('.fk-radio').forEach(x=>x.classList.toggle('sel',x.querySelector('input').checked));
+      $('fk-single').style.display=d.date==='single'?'block':'none';
+      $('fk-range').style.display=d.date==='range'?'block':'none'})}
+  if(fkTab==='type'){c.innerHTML=fkRadio('fkt',TYPE_OPTS,d.type);
+    c.querySelectorAll('input[name=fkt]').forEach(r=>r.onchange=()=>{d.type=r.value;
+      c.querySelectorAll('.fk-radio').forEach(x=>x.classList.toggle('sel',x.querySelector('input').checked))})}
+  if(fkTab==='cats'){const ac=allCats();
+    c.innerHTML='<div class="apk-search"><span class="material-icons-round">search</span><input id="fk-catq" placeholder="Search"></div><div id="fk-catlist"></div>';
+    const draw=q=>{const f=(q||'').toLowerCase();
+      $('fk-catlist').innerHTML=['in','out'].map(t=>{
+        const list=ac[t].filter(n=>n.toLowerCase().includes(f));if(!list.length)return'';
+        return'<p class="fk-sub">'+(t==='in'?'Cash In':'Cash Out')+'</p>'+list.map(n=>
+        '<label class="fk-radio'+(d.cats.includes(n)?' sel':'')+'"><input type="checkbox" data-v="'+esc(n)+'"'+(d.cats.includes(n)?' checked':'')+'><span class="fk-check"></span>'+esc(n)+'</label>').join('')}).join('')||'<div class="empty">No categories</div>';
+      c.querySelectorAll('#fk-catlist input').forEach(x=>x.onchange=()=>{
+        const v=x.dataset.v;d.cats=x.checked?[...new Set([...d.cats,v])]:d.cats.filter(y=>y!==v);
+        x.closest('.fk-radio').classList.toggle('sel',x.checked)})};
+    draw('');$('fk-catq').oninput=e=>draw(e.target.value)}
+  if(fkTab==='methods'){c.innerHTML='<p class="fk-sub">Entries with</p>'+METHODS.map(m=>
+    '<label class="fk-radio'+(d.methods.includes(m)?' sel':'')+'"><input type="checkbox" data-v="'+m+'"'+(d.methods.includes(m)?' checked':'')+'><span class="fk-check"></span>'+esc(m)+'</label>').join('');
+    c.querySelectorAll('input').forEach(x=>x.onchange=()=>{const v=x.dataset.v;
+      d.methods=x.checked?[...new Set([...d.methods,v])]:d.methods.filter(y=>y!==v);
+      x.closest('.fk-radio').classList.toggle('sel',x.checked)})}}
+$('filters-back').onclick=()=>navigate('home');
+$('fk-clear').onclick=()=>{fkDraft=defFilters();state.filter='all';renderFkTabs();renderFkContent();toast('Filters cleared','info')};
+$('fk-apply').onclick=()=>{const d=fkDraft;
+  const s=$('fk-s'),fr=$('fk-fr'),to=$('fk-to');
+  if(s)d.single=s.value||todayISO();if(fr)d.from=fr.value;if(to)d.to=to.value;
+  state.filters={date:d.date,single:d.single,from:d.from,to:d.to,type:d.type,cats:[...d.cats],methods:[...d.methods]};
+  state.filter=d.type||'all';
+  navigate('home');render();toast('Filters applied','success')};
+function scopedTxs(){return Object.entries(curTxs()).filter(([,t])=>matchDate(t.date||''))}
 $('btn-refresh').onclick=()=>render();
 $('go-reports').onclick=()=>navigate('reports');
 function monthTxs(){return Object.entries(curTxs()).filter(([,t])=>(t.date||'').slice(0,7)===state.monthKey)}
@@ -322,14 +444,17 @@ function runningBalances(){ // all-time chronological id → balance-after
   return map}
 function render(){if(!state.user)return;const b=curBook();
   $('book-name-text').textContent=b?b.name:'—';
-  $('dash-month').textContent=fmtMonth(state.monthKey);$('page-sub').textContent=fmtMonth(state.monthKey)+(b?' • '+b.name:'');
-  paintTypeLabel();
-  const mtx=monthTxs();let tin=0,tout=0;
+  $('page-sub').textContent=dateLabel()+(b?' • '+b.name:'');
+  paintChips();
+  const mtx=scopedTxs();let tin=0,tout=0;
   mtx.forEach(([,t])=>{t.type==='in'?tin+=+t.amount||0:tout+=+t.amount||0});
   $('dash-in').textContent=fmtMoney(tin);$('dash-out').textContent=fmtMoney(tout);
   $('dash-balance').textContent=fmtMoney(tin-tout);
   const runBal=runningBalances();
   let rows=mtx.filter(([,t])=>state.filter==='all'||t.type===state.filter);
+  const fc=state.filters.cats,fm=state.filters.methods;
+  if(fc.length)rows=rows.filter(([,t])=>fc.includes(t.category||''));
+  if(fm.length)rows=rows.filter(([,t])=>fm.includes(t.method||'Cash'));
   if(state.search)rows=rows.filter(([,t])=>((t.note||'')+' '+(t.category||'')+' '+(t.amount||'')).toLowerCase().includes(state.search));
   rows.sort((a,c)=>state.sort==='desc'
     ?(c[1].date||'').localeCompare(a[1].date||'')||((c[1].createdAt||0)-(a[1].createdAt||0))
@@ -348,7 +473,9 @@ function render(){if(!state.user)return;const b=curBook();
       (t.note?'<p class="apk-remark">'+esc(t.note)+'</p>':'')+
       '<p class="apk-meta">Entry by '+esc(me)+' <span>'+esc(timeFmt(t.createdAt))+'</span></p>';
     el.onclick=()=>txMenu(id);box.appendChild(el)});
-  renderReports(mtx,tin,tout);if($('page-books').classList.contains('active'))renderBooks()}
+  const rpt=monthTxs();let rtin=0,rtout=0;
+  rpt.forEach(([,t])=>{t.type==='in'?rtin+=+t.amount||0:rtout+=+t.amount||0});
+  renderReports(rpt,rtin,rtout);if($('page-books').classList.contains('active'))renderBooks()}
 function txMenu(id){const o=$('modal-overlay');const t=curTxs()[id]||{};
   const me=(state.user.displayName||(state.user.email||'You').split('@')[0]);
   const when=(t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{day:'numeric',month:'short',year:'numeric'}):'')+(t.createdAt?', '+timeFmt(t.createdAt).replace(/^at /,''):'');
@@ -360,19 +487,96 @@ function txMenu(id){const o=$('modal-overlay');const t=curTxs()[id]||{};
     '<div class="apk-chips"><span class="chip-cat">'+esc(t.category||'-')+'</span><span class="chip-method">'+esc(t.method||'Cash')+'</span></div>'+
     (t.details?'<p class="apk-detail-full">'+esc(t.details)+'</p>':'')+
     '<button class="apk-editbtn" id="detail-edit"><span class="material-icons-round">edit</span> Edit entry</button></div>'+
-    '<p class="apk-created">Created By<span>'+esc(me)+'</span></p>';
+    '<p class="apk-created">Created By<span>'+esc((t.createdBy&&t.createdBy.name)||'—')+'</span></p>'+
+    ((t.history&&t.history.length)?'<p class="apk-created">Last Edited By<span>'+esc(t.history[t.history.length-1].by)+'</span></p>'+
+    '<button class="apk-editbtn" id="detail-hist"><span class="material-icons-round">history</span> View edit history</button>':'');
   const F=$('modal-footer');F.innerHTML='';
   const mk=(t2,cls,fn)=>{const x=document.createElement('button');x.className=cls;x.innerHTML=t2;
     x.onclick=()=>{o.classList.remove('active');fn()};return x};
   F.append(mk('<span class="material-icons-round" style="font-size:18px;vertical-align:-4px">share</span> Share entry','apk-share',()=>shareTx(id)),
     mk('Delete','btn-danger',()=>delTx(id)));
   $('detail-edit').onclick=()=>{o.classList.remove('active');editTx(id)};
+  const hb=$('detail-hist');if(hb)hb.onclick=()=>{o.classList.remove('active');openHistory(id)};
   o.classList.add('active');o.onclick=ev=>{if(ev.target===o)o.classList.remove('active')}}
-function shareTx(id){const t=curTxs()[id];if(!t)return;const b=curBook();
-  const text=(t.type==='in'?'Cash In':'Cash Out')+' '+fmtMoney(t.amount)+' • '+(t.category||'')+(t.note?' — '+t.note:'')+' ('+(b?b.name:'')+', '+t.date+')';
-  if(navigator.share)navigator.share({title:'Cashbook entry',text}).catch(()=>{});
-  else if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>toast('Copied to clipboard','success'));
-  else toast(text,'info')}
+function fmtDT(ts){const d=new Date(+ts);if(isNaN(d))return'';
+  return d.toLocaleDateString('en-US',{day:'numeric',month:'short',year:'numeric'})+', '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})}
+function openHistory(id){const t=curTxs()[id]||{};const hist=pruneHist(t.history||[]).slice().reverse();
+  const o=$('modal-overlay');o.classList.add('sheet');$('modal-title').textContent='';
+  let lastDay='';
+  const rows=hist.map(h=>{
+    const d=new Date(h.at);const day=d.toLocaleDateString('en-US',{day:'2-digit',month:'long',year:'numeric'});
+    const head=day!==lastDay?'<p class="apk-day">'+day+'</p>':'';lastDay=day;
+    const ch=h.changes.map(c=>'<div style="margin-top:10px"><strong style="font-size:15px">Edited '+(HIST_LABEL[c.f]||c.f)+'</strong>'+
+      '<small>To: '+esc(fmtVal(c.f,c.to))+'</small><small>From: '+esc(fmtVal(c.f,c.from))+'</small></div>').join('');
+    return head+'<div class="hist-row"><div class="hist-av">'+esc((h.by||'Y')[0].toUpperCase())+'</div>'+
+      '<div class="hist-main"><strong>'+esc(h.by||'')+'</strong>'+ch+'</div>'+
+      '<span class="hist-time">'+esc(d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}))+'</span></div>'}).join('');
+  $('modal-body').innerHTML='<div class="sheet-head"><button class="sheet-x" id="sheet-x"><span class="material-icons-round">close</span></button><h3>Edit History</h3></div>'+
+    '<div class="sheet-body"><div class="apk-count"><span></span><p>Showing '+hist.length+' '+(hist.length===1?'activity':'activities')+'</p><span></span></div>'+
+    (rows||'<div class="empty">No edits yet.</div>')+
+    '<div class="hist-note"><span class="material-icons-round">info</span><span>Edit History is maintained only for last 30 days.</span></div></div>'+
+    '<div class="sheet-foot"></div>';
+  $('modal-footer').innerHTML='';
+  $('sheet-x').onclick=closeSheet;
+  o.classList.add('active');o.onclick=ev=>{if(ev.target===o)closeSheet()}}
+function ordinal(n){const s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])}
+function billDate(ds){const d=new Date((ds||todayISO())+'T12:00:00');
+  return ordinal(d.getDate())+' '+d.toLocaleDateString('en-US',{month:'short'})+' '+d.getFullYear()}
+function loadImg(src){return new Promise(res=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src})}
+function wrapLines(ctx,text,maxW){const words=(''+text).split(/\s+/).filter(Boolean);
+  const lines=[];let line='';
+  words.forEach(w=>{const t=line?line+' '+w:w;
+    if(ctx.measureText(t).width>maxW&&line){lines.push(line);line=w}else line=t});
+  if(line)lines.push(line);return lines.length?lines:['-']}
+async function shareTx(id){const t=curTxs()[id];if(!t)return;const b=curBook();
+  toast('Making bill image…','info');
+  const W=1080,PAD=64,PUR='#4f2fd6',INK='#111',GREY='#888';
+  const amtStr=Number(t.amount||0).toLocaleString('en-US',{maximumFractionDigits:2});
+  const amtCol=t.type==='in'?'#1e8e3e':'#d32f2f';
+  const cv=document.createElement('canvas');const ctx=cv.getContext('2d');
+  const F=(px,w)=>{ctx.font=(w||'')+px+'px Arial,sans-serif'};
+  const remarkLines=wrapLines((F(42),ctx),t.note||t.category||'-',W-PAD*2-300);
+  const H=90+120+150+120+70+remarkLines.length*58+150+150+90;
+  cv.width=W;cv.height=H;
+  ctx.fillStyle=PUR;ctx.fillRect(0,0,W,H);
+  // receipt body
+  const rx=PAD,ry=48,rw=W-PAD*2,rh=H-96;
+  ctx.fillStyle='#fff';
+  if(ctx.roundRect){ctx.beginPath();ctx.roundRect(rx,ry,rw,rh,8);ctx.fill()}
+  else ctx.fillRect(rx,ry,rw,rh);
+  // perforated top edge
+  ctx.fillStyle=PUR;
+  for(let x=rx+24;x<rx+rw-10;x+=64){ctx.beginPath();ctx.arc(x,ry,17,0,Math.PI*2);ctx.fill()}
+  let y=ry+118;
+  ctx.textBaseline='alphabetic';
+  F(46,'bold');ctx.fillStyle=INK;ctx.textAlign='left';ctx.fillText('Bill',rx+40,y);
+  F(34);ctx.fillStyle=GREY;ctx.textAlign='right';ctx.fillText('Bill Date: '+billDate(t.date),rx+rw-40,y+4);
+  y+=34;ctx.strokeStyle='#eee';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(rx,y);ctx.lineTo(rx+rw,y);ctx.stroke();y+=86;
+  F(34);ctx.fillStyle=GREY;ctx.textAlign='right';ctx.fillText('Mode',rx+rw-40,y);
+  F(46,'bold');ctx.fillStyle=INK;ctx.fillText(t.method||'Cash',rx+rw-40,y+62);y+=100;
+  F(34);ctx.fillStyle=GREY;ctx.textAlign='left';ctx.fillText('Details',rx+40,y);
+  ctx.textAlign='right';ctx.fillText('Amount',rx+rw-40,y);y+=72;
+  F(42);ctx.fillStyle=INK;ctx.textAlign='left';
+  remarkLines.forEach((ln,i)=>ctx.fillText(ln,rx+40,y+i*58));
+  F(64,'bold');ctx.fillStyle=amtCol;ctx.textAlign='right';ctx.fillText(amtStr,rx+rw-40,y);
+  y+=remarkLines.length*58+110;
+  F(34);ctx.fillStyle=GREY;ctx.textAlign='center';ctx.fillText('Created by',W/2,y);y+=86;
+  const logo=await loadImg('icon.png');
+  const bw=ctx.textAlign='left';
+  if(logo){const s=84;ctx.drawImage(logo,W/2-150,y-58,s,s);
+    F(44,'bold');ctx.fillStyle='#2b4bd6';ctx.fillText('CASHBOOK',W/2-52,y-12);
+    F(23);ctx.fillStyle=INK;ctx.fillText('Easy to Use  |  100 % Safe',W/2-52,y+24)}
+  else{F(40,'bold');ctx.fillStyle='#2b4bd6';ctx.textAlign='center';ctx.fillText('CASHBOOK',W/2,y)}
+  cv.toBlob(async blob=>{
+    if(!blob)return toast('Could not make image','error');
+    const file=new File([blob],'cashbook-bill-'+t.date+'.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'Cashbook bill'});return}
+      catch(e){if(e&&e.name==='AbortError')return}}
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    toast('Bill image downloaded','success')},'image/png')}
 function renderReports(mtx,tin,tout){
   $('report-month').innerHTML='<div class="rrow"><span>Cash In</span><strong style="color:var(--green)">'+fmtMoney(tin)+'</strong></div>'+
     '<div class="rrow"><span>Cash Out</span><strong style="color:var(--danger)">'+fmtMoney(tout)+'</strong></div>'+
