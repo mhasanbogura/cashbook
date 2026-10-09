@@ -397,6 +397,38 @@ function tableFromText(text){
     const o={};head.forEach((h,j)=>o[h]=parts[j]!==undefined?parts[j]:'');out.push(o)}
   return normalizeKeys(out)}
 /* ----- statement-PDF tables: rebuild grid from text coordinates ----- */
+function clusters(vals,n){
+  const s=[...new Set(vals.map(v=>Math.round(v)))].sort((a,b)=>a-b);
+  if(s.length<=n)return s;
+  const gaps=[];for(let i=1;i<s.length;i++)gaps.push({i,g:s[i]-s[i-1]});
+  gaps.sort((a,b)=>b.g-a.g);
+  const cuts=gaps.slice(0,n-1).map(g=>g.i).sort((a,b)=>a-b);
+  const groups=[];let start=0;
+  cuts.forEach(c=>{groups.push(s.slice(start,c));start=c});groups.push(s.slice(start));
+  return groups.map(g=>g[Math.floor(g.length/2)]).sort((a,b)=>a-b)}
+function inferHC(pages){
+  const DATE_RE=/^\d{1,2}-[A-Za-z]{3}-\d{4}$/,NUM_RE=/^[\d,]+(\.\d{1,2})?$/;
+  const dates=[],nums=[],texts=[];
+  pages.forEach(items=>items.forEach(it=>{const t=it.s.trim();
+    if(DATE_RE.test(t))dates.push(it.x);
+    else if(NUM_RE.test(t))nums.push(it);
+    else if(t.length>1)texts.push(it)}));
+  if(!dates.length)return null;
+  const med=a=>{const s=[...a].sort((x,y)=>x-y);return s[Math.floor(s.length/2)]};
+  const dateX=med(dates);
+  const serials=nums.filter(o=>/^\d{1,4}$/.test(o.s.trim())&&o.x<dateX-10);
+  if(!serials.length)return null;
+  const serialMax=Math.max(...serials.map(o=>o.x));
+  const grp=clusters(nums.filter(o=>o.x>dateX+10).map(o=>o.x),3);
+  if(grp.length<3)return null;
+  const[inX,outX,balX]=grp;
+  const mid=texts.filter(o=>o.x>dateX+10&&o.x<inX-10);
+  let notesX=dateX+40,descX=null;
+  if(mid.length){notesX=med(mid.map(o=>o.x));
+    const g2=clusters(mid.map(o=>o.x),2);
+    if(g2.length>=2){notesX=g2[0];descX=g2[1]}}
+  if(descX===null)descX=notesX;
+  return{dateX,notesX,descX,inX,outX,balX,serialMax}}
 function bandItems(items,tol){
   const sorted=[...items].sort((a,b)=>b.y-a.y);const bands=[];let cur=null;
   sorted.forEach(it=>{if(!cur||Math.abs(it.y-cur.y)>tol){cur={y:it.y,items:[]};bands.push(cur)}cur.items.push(it)});
@@ -433,6 +465,8 @@ function buildPdfRows(pages,fileName){
       if(HC.outX===null&&HC.inX!==null)HC.outX=HC.inX+avg;
       debug.header=true}}};
   pages.forEach(items=>{debug.bands+=bandItems(items,3).length;findHC(bandItems(items,3))});
+  if(HC)debug.mode='header';
+  if(!HC){HC=inferHC(pages);if(HC)debug.mode='inferred'}
   if(!HC)return{rows:[],debug};
   const colOf=x=>{if(x<HC.serialMax+2)return 0;
     const c=[HC.dateX,HC.notesX,HC.descX,HC.inX,HC.outX,HC.balX];
@@ -442,7 +476,7 @@ function buildPdfRows(pages,fileName){
   let book='';
   bandItems(pages[0]||[],3).forEach(b=>{const t=norm(b.items.map(i=>i.s).join(' '));
     if(isHeaderTxt(t)||book)return;const m=t.match(/^(\d{1,2})\.\s*(.+)$/);if(m)book=(m[1]+'. '+m[2]).slice(0,60)});
-  if(!book){const base=fileName.replace(/\.(pdf|PDF)$/,'').replace(/(\d{2}-[A-Za-z]{3}-\d{4}).*$/,'$1').trim();
+  if(!book){const base=fileName.replace(/\.(pdf|PDF)$/,'').replace(/\s*\d{2}-[A-Za-z]{3}-\d{4}.*$/,'').trim();
     book=(base||'Imported').slice(0,60)}
   // 3) walk bands → records anchored by serial numbers or row dates
   const recs=[];let cur=null;
@@ -484,7 +518,7 @@ function readPdfFile(file){return file.arrayBuffer().then(buf=>loadPdfJs().then(
       .map(it=>({x:it.transform[4],y:it.transform[5],s:it.str||''})).filter(o=>o.s.trim()))}
   try{pdf.destroy()}catch(e){}
   const built=buildPdfRows(pages,file.name);
-  let rows=built.rows,why='read '+built.debug.pages+'p/'+built.debug.bands+' bands, header '+(built.debug.header?'found':'MISSING')+', records '+built.debug.records;
+  let rows=built.rows,why='read '+built.debug.pages+'p/'+built.debug.bands+' bands, mode '+(built.debug.mode||'none')+', header '+(built.debug.header?'found':'MISSING')+', records '+built.debug.records;
   if(!rows.length){ // fall back to plain-text table scan
     const text=pages.map(pg=>pg.map(o=>o.s).join(' ')).join('\n');
     rows=tableFromText(text)}
