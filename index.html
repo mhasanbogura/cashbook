@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="app-icon.png">
 <link rel="apple-touch-icon" href="app-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=1.5">
+<link rel="stylesheet" href="style.css?v=1.6">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com">
 <link rel="preconnect" href="https://securetoken.googleapis.com">
@@ -190,6 +190,12 @@
         <button class="settings-row btn" id="btn-cats-out"><span class="material-icons-round">arrow_upward</span> Cash Out categories</button>
       </div>
       <div class="settings-card">
+        <div class="settings-title">BACKUP & IMPORT</div>
+        <button class="settings-row btn" id="btn-import"><span class="material-icons-round">upload</span> Import CSV / XLS / PDF / DB</button>
+        <p class="import-hint">CashBook app exports: <b>cashTransaction</b> + <b>accounts</b> as <b>.csv / .xls / .pdf</b>, or the raw <b>.db</b> file. Accounts become books, deleted rows are skipped, re-imports skip duplicates.</p>
+        <input type="file" id="file-import" accept=".csv,.xls,.xlsx,.pdf,.db,.sqlite,.sqlite3" multiple hidden>
+      </div>
+      <div class="settings-card">
         <div class="settings-title">ACCOUNT</div>
         <button class="settings-row btn" id="btn-export2"><span class="material-icons-round">download</span> Export CSV</button>
         <button class="settings-row btn" id="btn-reset-link"><span class="material-icons-round">lock_reset</span> Reset password</button>
@@ -222,6 +228,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=1.5"></script>
+<script src="app.js?v=1.6"></script>
 </body>
 </html>

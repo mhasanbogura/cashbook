@@ -315,7 +315,9 @@ function render(){if(!state.user)return;const b=curBook();
     ($('g-'+CSS.escape(lastDay))||box).appendChild(el)});
   renderReports(mtx,tin,tout);if($('page-books').classList.contains('active'))renderBooks()}
 function txMenu(id){const o=$('modal-overlay');$('modal-title').textContent='Entry options';
-  $('modal-body').innerHTML='<p style="color:var(--sub);font-size:13px">Edit or delete this transaction.</p>';
+  const t=curTxs()[id]||{};
+  $('modal-body').innerHTML='<p style="color:var(--sub);font-size:13px">Edit or delete this transaction.</p>'+
+    (t.details?'<p style="margin-top:10px;font-size:13px;white-space:pre-wrap;max-height:200px;overflow:auto">'+esc(t.details)+'</p>':'');
   const F=$('modal-footer');F.innerHTML='';
   const e=document.createElement('button');e.className='btn-cancel';e.textContent='Edit';e.onclick=()=>{o.classList.remove('active');editTx(id)};
   const d=document.createElement('button');d.className='btn-danger';d.textContent='Delete';d.onclick=()=>{o.classList.remove('active');delTx(id)};
@@ -339,6 +341,202 @@ function renderReports(mtx,tin,tout){
   $('report-history').innerHTML=hist.map(h=>'<div class="bar-row"><span class="bar-name">'+h.label+'</span>'+
     '<div class="bar-track"><div class="bar-fill'+(h.net<0?' out':'')+'" style="width:'+Math.round(Math.abs(h.net)/mx*100)+'%"></div></div>'+
     '<span class="bar-amt">'+fmtMoney(h.net)+'</span></div>').join('')}
+/* ---------- import: CashBook APK exports (CSV / SQLite .db) ---------- */
+/* robust CSV parser: quotes, escaped "", commas + newlines inside fields */
+function parseCSV(text){
+  const rows=[];let row=[],val='',q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){val+='"';i++}else q=false}else val+=c}
+    else if(c==='"')q=true;
+    else if(c===','){row.push(val);val=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;
+      row.push(val);val='';
+      if(row.length>1||(row.length===1&&row[0]!==''))rows.push(row);row=[]}
+    else val+=c}
+  if(val!==''||row.length){row.push(val);if(row.length>1||row[0]!=='')rows.push(row)}
+  return rows}
+function rowsToObjects(rows){if(!rows.length)return[];
+  const head=rows[0].map(h=>h.trim());
+  return rows.slice(1).map(r=>{const o={};head.forEach((h,i)=>o[h]=r[i]!==undefined?r[i]:'');return o})}
+/* header normaliser for XLS/PDF sources (case/space/underscore tolerant) */
+const KEYMAP={id:'id',name:'name',date:'date',cashin:'cash_in',cashout:'cash_out',notes:'notes',note:'notes',
+  description:'description',desc:'description',details:'description',accounts:'accounts',account:'accounts',book:'accounts',
+  isdeleted:'isDeleted',transactiontype:'transactionType',type:'transactionType',balance:'balance',bill:'bill'};
+function normalizeKeys(rows){return rows.map(r=>{const o={};
+  Object.entries(r).forEach(([k,v])=>{const key=KEYMAP[(''+k).toLowerCase().replace(/[\s_]+/g,'')];
+    if(key)o[key]=(typeof v==='string')?v.trim():v});return o})}
+/* Excel (.xls/.xlsx) via SheetJS CDN — every sheet, header row → objects */
+function loadXlsx(){return new Promise((res,rej)=>{if(window.XLSX)return res(window.XLSX);
+  const s=document.createElement('script');s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  s.onload=()=>window.XLSX?res(window.XLSX):rej(new Error('xlsx lib failed'));s.onerror=()=>rej(new Error('xlsx CDN offline'));
+  document.head.appendChild(s)})}
+function parseSheetFile(file){return file.arrayBuffer().then(buf=>loadXlsx().then(XLSX=>{
+  const wb=XLSX.read(buf,{type:'array'});const out=[];
+  wb.SheetNames.forEach(sn=>{const arr=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:'',raw:false});
+    if(arr&&arr.length)normalizeKeys(arr).forEach(r=>out.push(r))});
+  if(!out.length)throw new Error('no rows in workbook');return out}))}
+/* PDF via pdf.js CDN — finds a delimiter table whose header names transaction fields */
+function loadPdfJs(){return new Promise((res,rej)=>{if(window.pdfjsLib)return res(window.pdfjsLib);
+  const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload=()=>{try{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    res(window.pdfjsLib)}catch(e){rej(e)}};s.onerror=()=>rej(new Error('pdf.js CDN offline'));document.head.appendChild(s)})}
+function tableFromText(text){
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>1);
+  const words=['cash','account','note','description','transaction','balance','deleted'];
+  let hi=-1,delim=',',best=0;
+  lines.slice(0,60).forEach((l,i)=>{const low=l.toLowerCase();
+    const hits=words.filter(w=>low.includes(w)).length;if(hits<3||hits<=best)return;
+    const cands=[',','\t',';','|'].map(d=>({d,n:l.split(d).length})).sort((a,b)=>b.n-a.n)[0];
+    if(cands.n>=3){best=hits;hi=i;delim=cands.d}});
+  if(hi<0)return[];
+  const strip=s=>{s=s.trim();if(s.length>1&&s[0]==='"'&&s[s.length-1]==='"')s=s.slice(1,-1);return s};
+  const head=lines[hi].split(delim).map(strip);
+  const out=[];
+  for(let i=hi+1;i<lines.length&&out.length<5000;i++){const parts=lines[i].split(delim).map(strip);
+    if(parts.length<head.length-1)continue;
+    const o={};head.forEach((h,j)=>o[h]=parts[j]!==undefined?parts[j]:'');out.push(o)}
+  return normalizeKeys(out)}
+function readPdfFile(file){return file.arrayBuffer().then(buf=>loadPdfJs().then(async pdfjs=>{
+  const pdf=await pdfjs.getDocument({data:new Uint8Array(buf)}).promise;
+  let text='';const n=Math.min(pdf.numPages,50);
+  for(let p=1;p<=n;p++){const pg=await pdf.getPage(p);
+    text+=(await pg.getTextContent()).items.map(it=>it.str).join(' ')+'\n'}
+  try{pdf.destroy()}catch(e){}
+  const rows=tableFromText(text);
+  if(!rows.length)throw new Error('no transaction table found');return rows}))}
+function methodForAccount(name){const n=(name||'').toLowerCase();
+  if(n.includes('bkash'))return'bKash';if(n.includes('nagad'))return'Nagad';
+  if(n.includes('rocket'))return'Rocket';if(n.includes('cash'))return'Cash';
+  if(n.includes('bank')||n.includes('abbl')||n.includes('dbbl')||n.includes('ibbl'))return'Bank';
+  return'Cash'}
+function dateFromMs(ms){const d=new Date(+ms);return isNaN(d.getTime())?null:d.toISOString().slice(0,10)}
+function mapApkRow(r){
+  if(+r.isDeleted)return null;
+  const type=+r.transactionType===1?'in':'out';
+  const amt=type==='in'?parseFloat(r.cash_in):parseFloat(r.cash_out);
+  if(!(amt>0))return null;
+  const date=dateFromMs(r.date);if(!date)return null;
+  const desc=(r.description||'').trim();
+  return{type,amount:Math.round(amt*100)/100,
+    category:(r.notes||'').trim()||(type==='in'?'Cash In':'Cash Out'),
+    note:desc.split('\n')[0].slice(0,120),
+    details:desc.length>120?desc:'',
+    method:methodForAccount(r.accounts),
+    book:(r.accounts||'').trim()||'My Book',
+    date,createdAt:+r.date||Date.now(),importId:'csv-'+(r.id||(''+date+amt))}}
+function collectImport(parsedFiles){
+  // parsedFiles: [{name, rows:[objects]}] — returns plan
+  const plan={books:{},skipped:0,files:0};
+  const getBook=name=>{name=(name||'').trim()||'My Book';
+    if(!plan.books[name])plan.books[name]={name,txs:[],newCats:{in:[],out:[]},exists:!!bookIdByName(name)};
+    return plan.books[name]};
+  parsedFiles.forEach(f=>{
+    if(!f.rows.length)return;plan.files++;
+    const keys=Object.keys(f.rows[0]);
+    if(keys.includes('name')&&(keys.includes('_id')||keys.length<=2)&&!keys.includes('cash_in')){
+      f.rows.forEach(r=>{if((r.name||'').trim())getBook(r.name)});return} // accounts.csv
+    if(keys.includes('cash_in')||keys.includes('transactionType')){
+      f.rows.forEach(r=>{const tx=mapApkRow(r);
+        if(!tx){plan.skipped++;return}
+        const b=getBook(tx.book);b.txs.push(tx);
+        if(!catExists(b.name,tx.type,tx.category)&&!b.newCats[tx.type].includes(tx.category))
+          b.newCats[tx.type].push(tx.category)});return}
+    plan.skipped+=f.rows.length}) // unknown format
+  return plan}
+function bookIdByName(name){name=(name||'').trim().toLowerCase();
+  return Object.keys(state.books).find(id=>(state.books[id].name||'').trim().toLowerCase()===name)||null}
+function catExists(bookName,type,cat){const id=bookIdByName(bookName);
+  if(!id)return false;const c=state.books[id].categories&&state.books[id].categories[type];
+  if(!c)return false;const low=cat.toLowerCase();
+  return Object.values(c).some(n=>(n||'').toLowerCase()===low)}
+function txImported(bookId,importId){const txs=(state.books[bookId]||{}).transactions||{};
+  return Object.values(txs).some(t=>t.importId===importId)}
+function executeImport(plan){
+  let nTx=0,nBook=0,nCat=0;const now=Date.now();
+  const newKey=prefix=>state.demo?prefix+now+Math.floor(Math.random()*1e6):firebase.database().ref().push().key;
+  const batch={};
+  Object.values(plan.books).forEach(b=>{
+    let id=bookIdByName(b.name);
+    if(!id){id=newKey('b');nBook++;
+      batch[basePath()+'/books/'+id]={name:b.name,createdAt:now,transactions:{},categories:seedCats()}}
+    const existingCats=state.books[id]?state.books[id].categories:null;
+    ['in','out'].forEach(t=>b.newCats[t].forEach(name=>{
+      const has=existingCats&&existingCats[t]&&Object.values(existingCats[t]).some(n=>(n||'').toLowerCase()===name.toLowerCase());
+      if(has)return;
+      if(state.demo){(state.books[id].categories=state.books[id].categories||{in:{},out:{}});
+        state.books[id].categories[t]=state.books[id].categories[t]||{};
+        state.books[id].categories[t][newKey('c')]=name}
+      else batch[basePath()+'/books/'+id+'/categories/'+t+'/'+newKey('c')]=name;nCat++}));
+    b.txs.forEach(tx=>{if(txImported(id,tx.importId))return;
+      const{book,...rest}=tx;
+      if(state.demo){(state.books[id].transactions=state.books[id].transactions||{})['csv-'+nTx+'-'+now]=rest}
+      else batch[basePath()+'/books/'+id+'/transactions/csv-'+rest.importId.replace(/^csv-/,'')]=rest;nTx++})});
+  if(state.demo){persistDemo();if(!state.current)state.current=Object.keys(state.books)[0];
+    renderCats();render();toast('Imported '+nTx+' entries into '+Object.keys(plan.books).length+' books','success');return}
+  if(!Object.keys(batch).length){toast('Nothing new — all rows already imported','info');return}
+  firebase.database().ref().update(batch).then(()=>{
+    // point at first imported book
+    const first=Object.keys(plan.books)[0];const id=first&&bookIdByName(first);
+    toast('Imported '+nTx+' entries'+(nBook?' + '+nBook+' new books':'')+(nCat?' + '+nCat+' categories':''),'success')})
+    .catch(e=>toast(e.message,'error'))}
+function basePath(){return'cashbook/'+uid()}
+function importFiles(files){
+  if(!state.user)return toast('Log in first','error');
+  const list=[...files].filter(f=>/\.(csv|xlsx?|db|sqlite3?|pdf)$/i.test(f.name));
+  if(!list.length)return toast('Pick .csv / .xls / .pdf / .db files','error');
+  toast('Reading '+list.length+' file(s)…','info');
+  const reads=list.map(f=>new Promise(res=>{
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+    if(ext==='csv'){const r=new FileReader();
+      r.onload=()=>{try{res({name:f.name,rows:rowsToObjects(parseCSV(r.result))})}catch(e){res({name:f.name,rows:[],err:''+e})}};
+      r.onerror=()=>res({name:f.name,rows:[],err:'unreadable'});r.readAsText(f);return}
+    if(ext==='xls'||ext==='xlsx'){parseSheetFile(f).then(rows=>res({name:f.name,rows}))
+      .catch(e=>res({name:f.name,rows:[],err:''+(e.message||e)}));return}
+    if(ext==='pdf'){readPdfFile(f).then(rows=>res({name:f.name,rows}))
+      .catch(e=>res({name:f.name,rows:[],err:''+(e.message||e)}));return}
+    readDbFile(f).then(rows=>res({name:f.name,rows})).catch(()=>res({name:f.name,rows:[],err:'db unreadable'}))}));
+  Promise.all(reads).then(parsed=>{
+    const bad=parsed.filter(p=>p.err);if(bad.length)toast(bad.map(b=>b.name+': '+b.err).join('; '),'error');
+    const plan=collectImport(parsed.filter(p=>!p.err));
+    const nTx=Object.values(plan.books).reduce((a,b)=>a+b.txs.length,0);
+    const nBk=Object.keys(plan.books).length;
+    if(!nTx&&!nBk)return toast('No importable rows found','error');
+    const lines=Object.entries(plan.books).map(([n,b])=>'<div class="rrow"><span>'+esc(n)+'</span><strong>'+b.txs.length+' entries</strong></div>').join('');
+    confirmDlg('Import data?','<div class="rrow"><span>Books</span><strong>'+nBk+'</strong></div>'+
+      '<div class="rrow"><span>New entries</span><strong>'+nTx+'</strong></div>'+
+      '<div class="rrow"><span>Skipped (deleted/empty)</span><strong>'+plan.skipped+'</strong></div>'+lines+
+      '<p class="import-hint">Duplicates are skipped on re-import. Nothing is deleted.</p>',
+      ()=>executeImport(plan),'Import')})}
+function readDbFile(file){
+  const loadSql=()=>new Promise((res,rej)=>{if(window.SQL)return res(window.SQL);
+    const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js';
+    s.onload=()=>res(window.SQL);s.onerror=()=>rej(new Error('sql.js CDN failed'));document.head.appendChild(s)});
+  return file.arrayBuffer().then(buf=>loadSql().then(async SQL=>{
+    const sql=await SQL({locateFile:f=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f});
+    const db=new sql.Database(new Uint8Array(buf));
+    const tables=db.exec("SELECT name FROM sqlite_master WHERE type='table'").values.flat().map(t=>(''+t).toLowerCase());
+    const out=[];
+    const pull=(table,want)=>{ // want: {col:possible names[]}
+      const tname=tables.find(t=>t===table.toLowerCase());if(!tname)return[];
+      let cols=[];try{cols=db.exec('SELECT * FROM "'+tname+'" LIMIT 1').columns}catch(e){return[]}
+      const lower=cols.map(c=>(''+c).toLowerCase());
+      const pick=cands=>{for(const c of cands){const i=lower.indexOf(c);if(i>=0)return cols[i]}return null};
+      const sel=Object.entries(want).map(([k,cands])=>({k,col:pick(cands)})).filter(x=>x.col);
+      if(!sel.length)return[];
+      try{const r=db.exec('SELECT '+sel.map(s=>'"'+s.col+'"').join(',')+' FROM "'+tname+'"');
+        if(!r.length)return[];
+        return r.values.map(v=>{const o={};sel.forEach((s,i)=>o[s.k]=v[i]);return o})}catch(e){return[]}};
+    pull('accounts',{_id:['id','_id'],name:['name','account','title']}).forEach(r=>out.push({name:''+r.name}));
+    const txs=pull('cashtransaction',{id:['id'],date:['date'],cash_in:['cash_in','cashin'],cash_out:['cash_out','cashout'],
+      notes:['notes','note','category'],description:['description','desc','details'],accounts:['accounts','account','book'],
+      isDeleted:['isdeleted'],transactionType:['transactiontype','type']});
+    txs.forEach(r=>out.push(Object.assign({balance:0,bill:''},r)));
+    try{db.close()}catch(e){}
+    // tag so collectImport recognises tx rows
+    return out.map(r=>('cash_in' in r||'transactionType' in r||'cash_out' in r)?
+      Object.assign({transactionType:r.transactionType!==undefined?r.transactionType:(+r.cash_in>0?1:2)},r):r)}))}
+$('btn-import').onclick=()=>$('file-import').click();
+$('file-import').onchange=e=>{if(e.target.files.length)importFiles(e.target.files);e.target.value=''};
 /* ---------- export ---------- */
 function exportCSV(){const b=curBook();const rows=[['book','date','type','category','note','method','amount']];
   Object.values(curTxs()).sort((a,c)=>(a.date||'').localeCompare(c.date||'')).forEach(t=>
